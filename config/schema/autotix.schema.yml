@@ -1,0 +1,34 @@
+autotix.settings:
+  type: config_object
+  label: 'Autotix settings'
+  mapping:
+    enabled:
+      type: boolean
+      label: 'Enabled'
+    webhook_url:
+      type: string
+      label: 'Webhook URL'
+    auth_method:
+      type: string
+      label: 'Authentication method'
+    auth_token:
+      type: string
+      label: 'Auth token'
+    auth_secret:
+      type: string
+      label: 'HMAC secret'
+    severity_threshold:
+      type: integer
+      label: 'Severity threshold'
+    environment:
+      type: string
+      label: 'Environment name'
+    dedup_window:
+      type: integer
+      label: 'Deduplication window (seconds)'
+    include_backtrace:
+      type: boolean
+      label: 'Include backtrace'
+    timeout:
+      type: integer
+      label: 'HTTP timeout (seconds)'

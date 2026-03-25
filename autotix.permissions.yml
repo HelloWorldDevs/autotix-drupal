@@ -1,0 +1,4 @@
+administer autotix:
+  title: 'Administer Autotix'
+  description: 'Configure the Autotix module settings.'
+  restrict access: true

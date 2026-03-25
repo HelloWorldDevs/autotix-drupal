@@ -1,0 +1,17 @@
+<?php
+
+/**
+ * @file
+ * Sends Drupal watchdog errors to Autotix for automated ticket creation.
+ */
+
+use Drupal\Core\Routing\RouteMatchInterface;
+
+/**
+ * Implements hook_help().
+ */
+function autotix_help($route_name, RouteMatchInterface $route_match) {
+  if ($route_name === 'help.page.autotix') {
+    return '<p>' . t('Forwards watchdog log entries that meet a severity threshold to Autotix for automated ticket creation and resolution.') . '</p>';
+  }
+}

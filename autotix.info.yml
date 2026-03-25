@@ -1,0 +1,6 @@
+name: Autotix
+type: module
+description: 'Sends Drupal watchdog log errors to Autotix for automated ticket creation and resolution.'
+core_version_requirement: ^10.3 || ^11
+package: Development
+configure: autotix.settings_form

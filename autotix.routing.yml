@@ -1,0 +1,15 @@
+autotix.settings_form:
+  path: '/admin/config/services/autotix'
+  defaults:
+    _form: '\Drupal\autotix\Form\SettingsForm'
+    _title: 'Autotix'
+  requirements:
+    _permission: 'administer autotix'
+
+autotix.test:
+  path: '/admin/config/services/autotix/test'
+  defaults:
+    _controller: '\Drupal\autotix\Controller\TestController::trigger'
+    _title: 'Test Autotix'
+  requirements:
+    _permission: 'administer autotix'

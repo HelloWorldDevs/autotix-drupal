@@ -1,0 +1,21 @@
+services:
+  logger.autotix:
+    class: Drupal\autotix\Logger\WebhookLogger
+    arguments:
+      - '@config.factory'
+      - '@autotix.deduplication'
+      - '@queue'
+    tags:
+      - { name: logger }
+
+  autotix.client:
+    class: Drupal\autotix\Service\WebhookClient
+    arguments:
+      - '@http_client'
+      - '@config.factory'
+
+  autotix.deduplication:
+    class: Drupal\autotix\Service\DeduplicationService
+    arguments:
+      - '@cache.default'
+      - '@config.factory'

@@ -1,0 +1,5 @@
+autotix.settings_form:
+  title: 'Autotix'
+  description: 'Configure Autotix error forwarding and automated ticket creation.'
+  route_name: autotix.settings_form
+  parent: system.admin_config_services

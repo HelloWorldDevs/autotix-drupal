@@ -1,0 +1,13 @@
+<?php
+
+/**
+ * @file
+ * Install/uninstall hooks for Autotix.
+ */
+
+/**
+ * Implements hook_uninstall().
+ */
+function autotix_uninstall() {
+  \Drupal::configFactory()->getEditable('autotix.settings')->delete();
+}

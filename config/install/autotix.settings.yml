@@ -1,0 +1,10 @@
+enabled: false
+webhook_url: ''
+auth_method: 'token'
+auth_token: ''
+auth_secret: ''
+severity_threshold: 3
+environment: 'production'
+dedup_window: 300
+include_backtrace: false
+timeout: 20
