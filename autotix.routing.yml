@@ -13,3 +13,11 @@ autotix.test:
     _title: 'Test Autotix'
   requirements:
     _permission: 'administer autotix'
+
+autotix.push_error:
+  path: '/admin/config/services/autotix/push'
+  defaults:
+    _form: '\Drupal\autotix\Form\PushErrorForm'
+    _title: 'Push Custom Error'
+  requirements:
+    _permission: 'administer autotix'

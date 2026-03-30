@@ -73,8 +73,9 @@ class WebhookLogger implements LoggerInterface {
     // Render the message with placeholders.
     $rendered_message = $this->renderMessage($message, $context);
 
-    // Deduplication check.
-    if ($this->dedup->isDuplicate($channel, $rendered_message)) {
+    // Deduplication check — use the raw template so dynamic values
+    // (timestamps, IPs, request URIs) don't defeat dedup.
+    if ($this->dedup->isDuplicate($channel, (string) $message)) {
       return;
     }
 
@@ -154,12 +155,20 @@ class WebhookLogger implements LoggerInterface {
   }
 
   /**
-   * Render a log message by replacing placeholders with context values.
+   * Render a log message by replacing Drupal placeholders with context values.
+   *
+   * Only keys starting with @, %, or ! are treated as placeholders, following
+   * Drupal's logging conventions. Other context keys (uid, ip, timestamp, etc.)
+   * are ignored so they don't accidentally replace substrings in the message.
    */
   protected function renderMessage(string|\Stringable $message, array $context): string {
     $message = (string) $message;
     $replacements = [];
     foreach ($context as $key => $value) {
+      // Only substitute Drupal-style placeholders (@key, %key, !key).
+      if (!is_string($key) || $key === '' || !in_array($key[0], ['@', '%', '!'], TRUE)) {
+        continue;
+      }
       if (is_string($value) || (is_object($value) && method_exists($value, '__toString'))) {
         $replacements[$key] = (string) $value;
       }

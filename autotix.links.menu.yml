@@ -3,3 +3,9 @@ autotix.settings_form:
   description: 'Configure Autotix error forwarding and automated ticket creation.'
   route_name: autotix.settings_form
   parent: system.admin_config_services
+
+autotix.push_error:
+  title: 'Push Custom Error'
+  description: 'Send a custom error to Autotix manually.'
+  route_name: autotix.push_error
+  parent: autotix.settings_form

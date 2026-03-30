@@ -5,6 +5,7 @@ auth_token: ''
 auth_secret: ''
 severity_threshold: 3
 environment: 'production'
-dedup_window: 300
+dedup_window: 86400
 include_backtrace: false
+debug: false
 timeout: 20

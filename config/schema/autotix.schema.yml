@@ -29,6 +29,9 @@ autotix.settings:
     include_backtrace:
       type: boolean
       label: 'Include backtrace'
+    debug:
+      type: boolean
+      label: 'Debug logging'
     timeout:
       type: integer
       label: 'HTTP timeout (seconds)'

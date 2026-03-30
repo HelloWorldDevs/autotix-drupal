@@ -4,6 +4,7 @@ namespace Drupal\autotix\Form;
 
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Url;
 
 /**
  * Admin configuration form for the Autotix module.
@@ -62,11 +63,20 @@ class SettingsForm extends ConfigFormBase {
       '#default_value' => $config->get('auth_method') ?? 'token',
     ];
 
+    $has_token_env = !empty(getenv('AUTOTIX_AUTH_TOKEN'));
+    $has_token_config = !empty($config->get('auth_token'));
+    $token_description = $this->t('Your Autotix webhook token. Can also be set via the <code>AUTOTIX_AUTH_TOKEN</code> environment variable (recommended).');
+    if ($has_token_env) {
+      $token_description .= ' ' . $this->t('<strong>Currently provided by environment variable.</strong>');
+    }
+    elseif ($has_token_config) {
+      $token_description .= ' ' . $this->t('<em>A value is saved. Leave blank to keep it.</em>');
+    }
+
     $form['auth']['auth_token'] = [
-      '#type' => 'textfield',
+      '#type' => 'password',
       '#title' => $this->t('Auth token'),
-      '#default_value' => $config->get('auth_token'),
-      '#description' => $this->t('Your Autotix webhook token. You can get this by connecting your site via the Autotix dashboard.'),
+      '#description' => $token_description,
       '#states' => [
         'visible' => [
           ':input[name="auth_method"]' => ['value' => 'token'],
@@ -74,11 +84,20 @@ class SettingsForm extends ConfigFormBase {
       ],
     ];
 
+    $has_secret_env = !empty(getenv('AUTOTIX_HMAC_SECRET'));
+    $has_secret_config = !empty($config->get('auth_secret'));
+    $secret_description = $this->t('The HMAC signing secret. Can also be set via the <code>AUTOTIX_HMAC_SECRET</code> environment variable (recommended).');
+    if ($has_secret_env) {
+      $secret_description .= ' ' . $this->t('<strong>Currently provided by environment variable.</strong>');
+    }
+    elseif ($has_secret_config) {
+      $secret_description .= ' ' . $this->t('<em>A value is saved. Leave blank to keep it.</em>');
+    }
+
     $form['auth']['auth_secret'] = [
-      '#type' => 'textfield',
+      '#type' => 'password',
       '#title' => $this->t('HMAC secret'),
-      '#default_value' => $config->get('auth_secret'),
-      '#description' => $this->t('The HMAC signing secret. Must match the WEBHOOK_HMAC_SECRET on your Autotix instance.'),
+      '#description' => $secret_description,
       '#states' => [
         'visible' => [
           ':input[name="auth_method"]' => ['value' => 'hmac'],
@@ -106,13 +125,13 @@ class SettingsForm extends ConfigFormBase {
         7 => $this->t('Debug'),
       ],
       '#default_value' => $config->get('severity_threshold') ?? 3,
-      '#description' => $this->t('Only send entries at this severity level or higher. Default: Error.'),
+      '#description' => $this->t('Only send entries at this severity level or more severe. Default: Error.'),
     ];
 
     $form['filtering']['dedup_window'] = [
       '#type' => 'number',
       '#title' => $this->t('Deduplication window (seconds)'),
-      '#default_value' => $config->get('dedup_window') ?? 300,
+      '#default_value' => $config->get('dedup_window') ?? 86400,
       '#min' => 0,
       '#description' => $this->t('Suppress duplicate messages within this many seconds. Set to 0 to disable.'),
     ];
@@ -137,6 +156,13 @@ class SettingsForm extends ConfigFormBase {
       '#description' => $this->t('Include a PHP backtrace in the payload. Useful for debugging but increases payload size.'),
     ];
 
+    $form['advanced']['debug'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Debug logging'),
+      '#default_value' => $config->get('debug'),
+      '#description' => $this->t('Log outbound requests and responses to the autotix_internal channel. Disable in production to avoid doubling log volume during error bursts.'),
+    ];
+
     $form['advanced']['timeout'] = [
       '#type' => 'number',
       '#title' => $this->t('HTTP timeout (seconds)'),
@@ -146,12 +172,20 @@ class SettingsForm extends ConfigFormBase {
       '#description' => $this->t('How long to wait for the Autotix endpoint to respond.'),
     ];
 
-    // Link to the test page.
-    $form['test'] = [
-      '#type' => 'markup',
-      '#markup' => '<p>' . $this->t('<a href=":url">Send a test error</a> to verify Autotix is working.', [
-        ':url' => '/admin/config/services/autotix/test',
-      ]) . '</p>',
+    // Links to test and push pages.
+    $form['test_link'] = [
+      '#type' => 'link',
+      '#title' => $this->t('Send a test error to verify Autotix is working'),
+      '#url' => Url::fromRoute('autotix.test'),
+      '#prefix' => '<p>',
+      '#suffix' => '</p>',
+    ];
+    $form['push_link'] = [
+      '#type' => 'link',
+      '#title' => $this->t('Push a custom error to Autotix manually'),
+      '#url' => Url::fromRoute('autotix.push_error'),
+      '#prefix' => '<p>',
+      '#suffix' => '</p>',
     ];
 
     return parent::buildForm($form, $form_state);
@@ -161,18 +195,30 @@ class SettingsForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
-    $this->config('autotix.settings')
+    $settings = $this->config('autotix.settings')
       ->set('enabled', (bool) $form_state->getValue('enabled'))
       ->set('webhook_url', $form_state->getValue('webhook_url'))
       ->set('auth_method', $form_state->getValue('auth_method'))
-      ->set('auth_token', $form_state->getValue('auth_token'))
-      ->set('auth_secret', $form_state->getValue('auth_secret'))
       ->set('severity_threshold', (int) $form_state->getValue('severity_threshold'))
       ->set('dedup_window', (int) $form_state->getValue('dedup_window'))
       ->set('environment', $form_state->getValue('environment'))
       ->set('include_backtrace', (bool) $form_state->getValue('include_backtrace'))
-      ->set('timeout', (int) $form_state->getValue('timeout'))
-      ->save();
+      ->set('debug', (bool) $form_state->getValue('debug'))
+      ->set('timeout', (int) $form_state->getValue('timeout'));
+
+    // Only overwrite secrets when a new value is entered (password fields
+    // are always submitted empty when the user doesn't touch them).
+    $token = $form_state->getValue('auth_token');
+    if (!empty($token)) {
+      $settings->set('auth_token', $token);
+    }
+
+    $secret = $form_state->getValue('auth_secret');
+    if (!empty($secret)) {
+      $settings->set('auth_secret', $secret);
+    }
+
+    $settings->save();
 
     parent::submitForm($form, $form_state);
   }

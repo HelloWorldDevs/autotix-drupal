@@ -26,7 +26,7 @@ class DeduplicationService {
    */
   public function isDuplicate(string $channel, string $message): bool {
     $config = $this->configFactory->get('autotix.settings');
-    $window = (int) ($config->get('dedup_window') ?? 300);
+    $window = (int) ($config->get('dedup_window') ?? 86400);
 
     if ($window <= 0) {
       return FALSE;

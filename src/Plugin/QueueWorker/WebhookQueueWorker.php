@@ -39,12 +39,26 @@ class WebhookQueueWorker extends QueueWorkerBase implements ContainerFactoryPlug
 
   /**
    * {@inheritdoc}
+   *
+   * Exceptions are caught for logging then rethrown so Drupal marks the item
+   * as failed and retries it on the next cron run, consistent with other
+   * queue workers in this repo.
    */
   public function processItem($data) {
     if (!is_array($data)) {
       return;
     }
-    $this->client->send($data);
+
+    try {
+      $this->client->send($data);
+    }
+    catch (\Exception $e) {
+      \Drupal::logger('autotix_internal')->error(
+        'Queue delivery failed, will retry: @error',
+        ['@error' => $e->getMessage()]
+      );
+      throw $e;
+    }
   }
 
 }
