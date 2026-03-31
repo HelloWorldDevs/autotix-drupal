@@ -18,7 +18,6 @@ use Symfony\Component\HttpFoundation\RequestStack;
 class PushErrorForm extends FormBase {
 
   protected QueueFactory $queueFactory;
-  protected ConfigFactoryInterface $configFactory;
   protected AccountProxyInterface $currentUser;
 
   public function __construct(
