@@ -20,7 +20,6 @@ class PushErrorForm extends FormBase {
   protected QueueFactory $queueFactory;
   protected ConfigFactoryInterface $configFactory;
   protected AccountProxyInterface $currentUser;
-  protected RequestStack $requestStack;
 
   public function __construct(
     QueueFactory $queue_factory,
