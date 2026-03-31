@@ -47,14 +47,14 @@ class PushErrorForm extends FormBase {
   /**
    * {@inheritdoc}
    */
-  public function getFormId() {
+  public function getFormId(): string {
     return 'autotix_push_error_form';
   }
 
   /**
    * {@inheritdoc}
    */
-  public function buildForm(array $form, FormStateInterface $form_state) {
+  public function buildForm(array $form, FormStateInterface $form_state): array {
     $config = $this->configFactory->get('autotix.settings');
 
     if (!$config->get('enabled')) {
@@ -129,7 +129,7 @@ class PushErrorForm extends FormBase {
   /**
    * {@inheritdoc}
    */
-  public function validateForm(array &$form, FormStateInterface $form_state) {
+  public function validateForm(array &$form, FormStateInterface $form_state): void {
     $config = $this->configFactory->get('autotix.settings');
     if (!$config->get('enabled')) {
       $form_state->setErrorByName('', $this->t('Autotix is currently disabled. Enable it in settings before pushing errors.'));
@@ -148,7 +148,7 @@ class PushErrorForm extends FormBase {
   /**
    * {@inheritdoc}
    */
-  public function submitForm(array &$form, FormStateInterface $form_state) {
+  public function submitForm(array &$form, FormStateInterface $form_state): void {
     $config = $this->configFactory->get('autotix.settings');
     $message = $form_state->getValue('message');
     $level = $form_state->getValue('level');

@@ -34,7 +34,7 @@ class WebhookClient {
     $url = $config->get('webhook_url');
 
     if (empty($url)) {
-      throw new \RuntimeException('Autotix webhook URL is not configured.');
+      throw new \RuntimeException('Autotix webhook URL is not configured');
     }
 
     try {
