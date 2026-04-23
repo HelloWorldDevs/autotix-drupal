@@ -41,7 +41,7 @@ class WebhookClient {
       $body = json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
     }
     catch (\JsonException $e) {
-      throw new \RuntimeException('Failed to encode Autotix webhook payload as JSON.', 0, $e);
+      throw new \RuntimeException('Failed to encode Autotix webhook payload as JSON', 0, $e);
     }
 
     $options = [
@@ -98,10 +98,19 @@ class WebhookClient {
     }
 
     if ($status < 200 || $status >= 300) {
-      $response_body = (string) $response->getBody();
-      throw new \RuntimeException(
-        "Autotix webhook returned HTTP {$status}: " . mb_strimwidth($response_body, 0, 200, '...')
-      );
+      if ($debug) {
+        $response_body = (string) $response->getBody();
+        \Drupal::logger('autotix_internal')->debug(
+          'Autotix webhook returned HTTP @status from @url | response: @response',
+          [
+            '@status' => $status,
+            '@url' => $url,
+            '@response' => mb_strimwidth($response_body, 0, 200, '...'),
+          ]
+        );
+      }
+
+      throw new \RuntimeException("Autotix webhook returned HTTP {$status}.");
     }
 
     return TRUE;

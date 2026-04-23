@@ -84,6 +84,19 @@ class SettingsForm extends ConfigFormBase {
       ],
     ];
 
+    if ($has_token_config && !$has_token_env) {
+      $form['auth']['clear_auth_token'] = [
+        '#type' => 'checkbox',
+        '#title' => $this->t('Clear saved auth token'),
+        '#default_value' => FALSE,
+        '#states' => [
+          'visible' => [
+            ':input[name="auth_method"]' => ['value' => 'token'],
+          ],
+        ],
+      ];
+    }
+
     $has_secret_env = !empty(getenv('AUTOTIX_HMAC_SECRET'));
     $has_secret_config = !empty($config->get('auth_secret'));
     $secret_description = $this->t('The HMAC signing secret. Can also be set via the <code>AUTOTIX_HMAC_SECRET</code> environment variable (recommended).');
@@ -104,6 +117,19 @@ class SettingsForm extends ConfigFormBase {
         ],
       ],
     ];
+
+    if ($has_secret_config && !$has_secret_env) {
+      $form['auth']['clear_auth_secret'] = [
+        '#type' => 'checkbox',
+        '#title' => $this->t('Clear saved HMAC secret'),
+        '#default_value' => FALSE,
+        '#states' => [
+          'visible' => [
+            ':input[name="auth_method"]' => ['value' => 'hmac'],
+          ],
+        ],
+      ];
+    }
 
     $form['delivery'] = [
       '#type' => 'details',
@@ -222,14 +248,25 @@ class SettingsForm extends ConfigFormBase {
 
     // Only overwrite secrets when a new value is entered (password fields
     // are always submitted empty when the user doesn't touch them).
-    $token = $form_state->getValue('auth_token');
-    if (!empty($token)) {
-      $settings->set('auth_token', $token);
+    // Explicit "clear" checkboxes allow admins to remove stored secrets.
+    if ($form_state->getValue('clear_auth_token')) {
+      $settings->set('auth_token', '');
+    }
+    else {
+      $token = $form_state->getValue('auth_token');
+      if (!empty($token)) {
+        $settings->set('auth_token', $token);
+      }
     }
 
-    $secret = $form_state->getValue('auth_secret');
-    if (!empty($secret)) {
-      $settings->set('auth_secret', $secret);
+    if ($form_state->getValue('clear_auth_secret')) {
+      $settings->set('auth_secret', '');
+    }
+    else {
+      $secret = $form_state->getValue('auth_secret');
+      if (!empty($secret)) {
+        $settings->set('auth_secret', $secret);
+      }
     }
 
     $settings->save();

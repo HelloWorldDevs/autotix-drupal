@@ -45,12 +45,16 @@ class DeduplicationServiceTest extends TestCase {
   public function testFirstOccurrenceIsNotDuplicate(): void {
     $this->cache->method('get')->willReturn(FALSE);
 
+    $startTime = time();
+
     $this->cache->expects($this->once())
       ->method('set')
       ->with(
         $this->stringContains('autotix:dedup:'),
         TRUE,
-        $this->greaterThan(time())
+        $this->callback(function ($expiry) use ($startTime): bool {
+          return is_int($expiry) && $expiry >= $startTime + $this->configValues['dedup_window'];
+        })
       );
 
     $result = $this->dedup->isDuplicate('php', 'Some error');

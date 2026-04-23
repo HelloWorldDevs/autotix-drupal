@@ -210,7 +210,7 @@ class WebhookClientTest extends TestCase {
       ->willReturn(new Response(500, [], 'Internal Server Error'));
 
     $this->expectException(\RuntimeException::class);
-    $this->expectExceptionMessage('HTTP 500');
+    $this->expectExceptionMessage('Autotix webhook returned HTTP 500.');
 
     $this->client->send(['message' => 'test']);
   }
@@ -223,9 +223,57 @@ class WebhookClientTest extends TestCase {
       ->willReturn(new Response(403, [], '{"error":"forbidden"}'));
 
     $this->expectException(\RuntimeException::class);
-    $this->expectExceptionMessage('HTTP 403');
+    $this->expectExceptionMessage('Autotix webhook returned HTTP 403.');
 
     $this->client->send(['message' => 'test']);
+  }
+
+  /**
+   * @covers ::send
+   */
+  public function testDebugLogsResponseBodyOnError(): void {
+    $this->configValues['debug'] = TRUE;
+
+    $this->httpClient->method('post')
+      ->willReturn(new Response(502, [], 'Bad Gateway'));
+
+    try {
+      $this->client->send(['message' => 'test']);
+      $this->fail('Expected RuntimeException');
+    }
+    catch (\RuntimeException $e) {
+      $this->assertStringContainsString('HTTP 502', $e->getMessage());
+      // Response body should NOT be in the exception message.
+      $this->assertStringNotContainsString('Bad Gateway', $e->getMessage());
+    }
+
+    // Response body should appear only in the debug log.
+    $logs = \Drupal::getLoggerEntries();
+    $errorLogs = array_filter($logs, fn($l) => str_contains($l['message'], 'HTTP'));
+    $this->assertNotEmpty($errorLogs, 'Debug log should contain the error response details');
+  }
+
+  /**
+   * @covers ::send
+   */
+  public function testNonDebugDoesNotLogResponseBodyOnError(): void {
+    $this->configValues['debug'] = FALSE;
+
+    $this->httpClient->method('post')
+      ->willReturn(new Response(500, [], 'Internal Server Error'));
+
+    try {
+      $this->client->send(['message' => 'test']);
+      $this->fail('Expected RuntimeException');
+    }
+    catch (\RuntimeException $e) {
+      // Exception should still be thrown.
+      $this->assertStringContainsString('HTTP 500', $e->getMessage());
+    }
+
+    // No debug logs should be produced.
+    $logs = \Drupal::getLoggerEntries();
+    $this->assertEmpty($logs, 'No log entries should exist when debug is off');
   }
 
   /**
