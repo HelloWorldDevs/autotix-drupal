@@ -15,3 +15,4 @@ function autotix_help($route_name, RouteMatchInterface $route_match) {
     return '<p>' . t('Forwards watchdog log entries that meet a severity threshold to Autotix for automated ticket creation and resolution.') . '</p>';
   }
 }
+

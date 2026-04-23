@@ -105,6 +105,19 @@ class SettingsForm extends ConfigFormBase {
       ],
     ];
 
+    $form['delivery'] = [
+      '#type' => 'details',
+      '#title' => $this->t('Delivery'),
+      '#open' => TRUE,
+    ];
+
+    $form['delivery']['send_immediately'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Send errors immediately'),
+      '#default_value' => $config->get('send_immediately'),
+      '#description' => $this->t('When checked, errors are sent to Autotix in real time during the request. When unchecked, errors are queued and delivered on the next cron run. Immediate mode falls back to the queue if the request fails.'),
+    ];
+
     $form['filtering'] = [
       '#type' => 'details',
       '#title' => $this->t('Filtering'),
@@ -199,6 +212,7 @@ class SettingsForm extends ConfigFormBase {
       ->set('enabled', (bool) $form_state->getValue('enabled'))
       ->set('webhook_url', $form_state->getValue('webhook_url'))
       ->set('auth_method', $form_state->getValue('auth_method'))
+      ->set('send_immediately', (bool) $form_state->getValue('send_immediately'))
       ->set('severity_threshold', (int) $form_state->getValue('severity_threshold'))
       ->set('dedup_window', (int) $form_state->getValue('dedup_window'))
       ->set('environment', $form_state->getValue('environment'))

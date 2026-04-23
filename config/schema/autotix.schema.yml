@@ -17,6 +17,9 @@ autotix.settings:
     auth_secret:
       type: string
       label: 'HMAC secret'
+    send_immediately:
+      type: boolean
+      label: 'Send errors immediately'
     severity_threshold:
       type: integer
       label: 'Severity threshold'

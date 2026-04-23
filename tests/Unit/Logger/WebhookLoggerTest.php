@@ -4,6 +4,7 @@ namespace Drupal\Tests\autotix\Unit\Logger;
 
 use Drupal\autotix\Logger\WebhookLogger;
 use Drupal\autotix\Service\DeduplicationService;
+use Drupal\autotix\Service\WebhookClient;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Config\ImmutableConfig;
 use Drupal\Core\Queue\QueueFactory;
@@ -21,6 +22,7 @@ class WebhookLoggerTest extends TestCase {
   private DeduplicationService $dedup;
   private QueueFactory $queueFactory;
   private QueueInterface $queue;
+  private WebhookClient $client;
   private WebhookLogger $logger;
 
   private array $configValues = [
@@ -61,10 +63,13 @@ class WebhookLoggerTest extends TestCase {
       ->with('autotix')
       ->willReturn($this->queue);
 
+    $this->client = $this->createMock(WebhookClient::class);
+
     $this->logger = new WebhookLogger(
       $this->configFactory,
       $this->dedup,
-      $this->queueFactory
+      $this->queueFactory,
+      $this->client
     );
   }
 
@@ -163,7 +168,8 @@ class WebhookLoggerTest extends TestCase {
     $this->logger = new WebhookLogger(
       $this->configFactory,
       $this->dedup,
-      $this->queueFactory
+      $this->queueFactory,
+      $this->client
     );
 
     $this->queue->expects($this->never())->method('createItem');
@@ -186,7 +192,8 @@ class WebhookLoggerTest extends TestCase {
     $this->logger = new WebhookLogger(
       $this->configFactory,
       $this->dedup,
-      $this->queueFactory
+      $this->queueFactory,
+      $this->client
     );
 
     $this->logger->log(3, 'Error at @time on @page', [

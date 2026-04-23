@@ -6,6 +6,7 @@ use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Logger\RfcLoggerTrait;
 use Drupal\Core\Queue\QueueFactory;
 use Drupal\autotix\Service\DeduplicationService;
+use Drupal\autotix\Service\WebhookClient;
 use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
 
@@ -33,15 +34,18 @@ class WebhookLogger implements LoggerInterface {
   protected ConfigFactoryInterface $configFactory;
   protected DeduplicationService $dedup;
   protected QueueFactory $queueFactory;
+  protected WebhookClient $client;
 
   public function __construct(
     ConfigFactoryInterface $config_factory,
     DeduplicationService $dedup,
     QueueFactory $queue_factory,
+    WebhookClient $client,
   ) {
     $this->configFactory = $config_factory;
     $this->dedup = $dedup;
     $this->queueFactory = $queue_factory;
+    $this->client = $client;
   }
 
   /**
@@ -113,9 +117,25 @@ class WebhookLogger implements LoggerInterface {
       }
     }
 
-    // Enqueue for async delivery (processed on cron).
-    $queue = $this->queueFactory->get('autotix');
-    $queue->createItem($payload);
+    // Send immediately or enqueue for cron, based on config.
+    if ($config->get('send_immediately')) {
+      try {
+        $this->client->send($payload);
+      }
+      catch (\Exception $e) {
+        // Fall back to queue on failure so the error isn't lost.
+        \Drupal::logger('autotix_internal')->warning(
+          'Immediate send failed, queuing for retry: @error',
+          ['@error' => $e->getMessage()]
+        );
+        $queue = $this->queueFactory->get('autotix');
+        $queue->createItem($payload);
+      }
+    }
+    else {
+      $queue = $this->queueFactory->get('autotix');
+      $queue->createItem($payload);
+    }
   }
 
   /**

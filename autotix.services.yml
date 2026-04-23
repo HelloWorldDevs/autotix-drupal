@@ -5,6 +5,7 @@ services:
       - '@config.factory'
       - '@autotix.deduplication'
       - '@queue'
+      - '@autotix.client'
     tags:
       - { name: logger }
 
