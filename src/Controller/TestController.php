@@ -21,9 +21,17 @@ class TestController extends ControllerBase {
       ['@time' => date('Y-m-d H:i:s')]
     );
 
-    $this->messenger()->addStatus(
-      $this->t('Test error has been queued. Run cron to deliver it, then check your Autotix dashboard.')
-    );
+    $config = $this->config('autotix.settings');
+    if ($config->get('send_immediately')) {
+      $this->messenger()->addStatus(
+        $this->t('Test error has been sent to Autotix. Check your dashboard.')
+      );
+    }
+    else {
+      $this->messenger()->addStatus(
+        $this->t('Test error has been queued. Run cron to deliver it, then check your Autotix dashboard.')
+      );
+    }
 
     return new RedirectResponse(
       Url::fromRoute('autotix.settings_form')->toString()

@@ -2,6 +2,7 @@
 
 namespace Drupal\autotix\Form;
 
+use Drupal\autotix\Service\WebhookClient;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
@@ -18,6 +19,7 @@ use Symfony\Component\HttpFoundation\RequestStack;
 class PushErrorForm extends FormBase {
 
   protected QueueFactory $queueFactory;
+  protected WebhookClient $webhookClient;
   protected AccountProxyInterface $currentUser;
 
   public function __construct(
@@ -25,11 +27,13 @@ class PushErrorForm extends FormBase {
     ConfigFactoryInterface $config_factory,
     AccountProxyInterface $current_user,
     RequestStack $request_stack,
+    WebhookClient $webhook_client,
   ) {
     $this->queueFactory = $queue_factory;
     $this->configFactory = $config_factory;
     $this->currentUser = $current_user;
     $this->requestStack = $request_stack;
+    $this->webhookClient = $webhook_client;
   }
 
   /**
@@ -41,6 +45,7 @@ class PushErrorForm extends FormBase {
       $container->get('config.factory'),
       $container->get('current_user'),
       $container->get('request_stack'),
+      $container->get('autotix.client'),
     );
   }
 
@@ -186,13 +191,31 @@ class PushErrorForm extends FormBase {
       }
     }
 
-    // Enqueue for async delivery.
-    $queue = $this->queueFactory->get('autotix');
-    $queue->createItem($payload);
-
-    $this->messenger()->addStatus(
-      $this->t('Custom error has been queued. Run cron to deliver it to Autotix.')
-    );
+    // Send immediately or enqueue, based on config.
+    $config = $this->configFactory->get('autotix.settings');
+    if ($config->get('send_immediately')) {
+      try {
+        $this->webhookClient->send($payload);
+        $this->messenger()->addStatus(
+          $this->t('Custom error has been sent to Autotix.')
+        );
+      }
+      catch (\Exception $e) {
+        // Fall back to queue on failure.
+        $queue = $this->queueFactory->get('autotix');
+        $queue->createItem($payload);
+        $this->messenger()->addWarning(
+          $this->t('Immediate send failed; error has been queued for delivery on next cron run.')
+        );
+      }
+    }
+    else {
+      $queue = $this->queueFactory->get('autotix');
+      $queue->createItem($payload);
+      $this->messenger()->addStatus(
+        $this->t('Custom error has been queued. Run cron to deliver it to Autotix.')
+      );
+    }
 
     $form_state->setRedirect('autotix.settings_form');
   }
