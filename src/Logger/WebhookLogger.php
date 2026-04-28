@@ -80,6 +80,13 @@ class WebhookLogger implements LoggerInterface {
     // Deduplication check — use the raw template so dynamic values
     // (timestamps, IPs, request URIs) don't defeat dedup.
     if ($this->dedup->isDuplicate($channel, (string) $message)) {
+      \Drupal::logger('autotix_internal')->info(
+        'Autotix skipped duplicate error — channel: @channel | message: @message',
+        [
+          '@channel' => $channel,
+          '@message' => mb_strimwidth($rendered_message, 0, 120, '...'),
+        ]
+      );
       return;
     }
 
@@ -119,6 +126,14 @@ class WebhookLogger implements LoggerInterface {
 
     // Send immediately or enqueue for cron, based on config.
     if ($config->get('send_immediately')) {
+      \Drupal::logger('autotix_internal')->info(
+        'Autotix capturing error (immediate mode) — channel: @channel | severity: @severity | message: @message',
+        [
+          '@channel' => $channel,
+          '@severity' => $severity,
+          '@message' => mb_strimwidth($rendered_message, 0, 120, '...'),
+        ]
+      );
       try {
         $this->client->send($payload);
       }
@@ -133,6 +148,14 @@ class WebhookLogger implements LoggerInterface {
       }
     }
     else {
+      \Drupal::logger('autotix_internal')->info(
+        'Autotix capturing error (queued for cron) — channel: @channel | severity: @severity | message: @message',
+        [
+          '@channel' => $channel,
+          '@severity' => $severity,
+          '@message' => mb_strimwidth($rendered_message, 0, 120, '...'),
+        ]
+      );
       $queue = $this->queueFactory->get('autotix');
       $queue->createItem($payload);
     }

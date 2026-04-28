@@ -110,8 +110,29 @@ class WebhookClient {
         );
       }
 
+      \Drupal::logger('autotix_internal')->warning(
+        'Autotix delivery FAILED — HTTP @status to @url | source: @source | level: @level',
+        [
+          '@status' => $status,
+          '@url' => $url,
+          '@source' => $payload['source'] ?? '(none)',
+          '@level' => $payload['level'] ?? '(none)',
+        ]
+      );
+
       throw new \RuntimeException("Autotix webhook returned HTTP {$status}.");
     }
+
+    // Always log successful deliveries so admins can verify the pipeline.
+    \Drupal::logger('autotix_internal')->info(
+      'Autotix delivered error to @url — source: @source | level: @level | message: @message',
+      [
+        '@url' => $url,
+        '@source' => $payload['source'] ?? '(none)',
+        '@level' => $payload['level'] ?? '(none)',
+        '@message' => mb_strimwidth($payload['message'] ?? '(empty)', 0, 120, '...'),
+      ]
+    );
 
     return TRUE;
   }
