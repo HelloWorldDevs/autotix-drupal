@@ -38,14 +38,6 @@ class SettingsForm extends ConfigFormBase {
       '#description' => $this->t('When enabled, watchdog entries meeting the severity threshold will be sent to Autotix for automated ticket creation.'),
     ];
 
-    $form['webhook_url'] = [
-      '#type' => 'url',
-      '#title' => $this->t('Webhook URL'),
-      '#default_value' => $config->get('webhook_url'),
-      '#description' => $this->t('The full URL of your Autotix webhook endpoint (e.g. https://app.autotix.io/api/webhook/error).'),
-      '#maxlength' => 2048,
-    ];
-
     $form['auth'] = [
       '#type' => 'details',
       '#title' => $this->t('Authentication'),
@@ -250,7 +242,6 @@ class SettingsForm extends ConfigFormBase {
   public function submitForm(array &$form, FormStateInterface $form_state): void {
     $settings = $this->config('autotix.settings')
       ->set('enabled', (bool) $form_state->getValue('enabled'))
-      ->set('webhook_url', $form_state->getValue('webhook_url'))
       ->set('auth_method', $form_state->getValue('auth_method'))
       ->set('send_immediately', (bool) $form_state->getValue('send_immediately'))
       ->set('severity_threshold', (int) $form_state->getValue('severity_threshold'))

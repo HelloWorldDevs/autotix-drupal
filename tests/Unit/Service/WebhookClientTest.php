@@ -25,7 +25,6 @@ class WebhookClientTest extends TestCase {
    * Default config values for a working setup.
    */
   private array $configValues = [
-    'webhook_url' => 'https://app.autotix.io/api/webhook/error',
     'timeout' => 20,
     'auth_method' => 'none',
     'auth_token' => '',
@@ -175,18 +174,6 @@ class WebhookClientTest extends TestCase {
       ->willReturn(new Response(200));
 
     $this->client->send($payload);
-  }
-
-  /**
-   * @covers ::send
-   */
-  public function testThrowsWhenUrlNotConfigured(): void {
-    $this->configValues['webhook_url'] = '';
-
-    $this->expectException(\RuntimeException::class);
-    $this->expectExceptionMessage('Autotix webhook URL is not configured');
-
-    $this->client->send(['message' => 'test']);
   }
 
   /**

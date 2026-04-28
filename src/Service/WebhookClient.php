@@ -10,6 +10,9 @@ use GuzzleHttp\ClientInterface;
  */
 class WebhookClient {
 
+  /** Production webhook endpoint — not configurable. */
+  protected const WEBHOOK_URL = 'https://app.autotix.io/api/webhook/error';
+
   protected ClientInterface $httpClient;
   protected ConfigFactoryInterface $configFactory;
 
@@ -19,23 +22,19 @@ class WebhookClient {
   }
 
   /**
-   * Send a payload to the configured webhook URL.
+   * Send a payload to the Autotix webhook.
    *
    * @return bool
    *   TRUE on success.
    *
    * @throws \RuntimeException
-   *   When the webhook URL is not configured, JSON encoding fails, or the
-   *   endpoint returns a non-2xx response. Callers (e.g. queue workers)
-   *   should let this bubble up so the item is retried.
+   *   When JSON encoding fails or the endpoint returns a non-2xx response.
+   *   Callers (e.g. queue workers) should let this bubble up so the item
+   *   is retried.
    */
   public function send(array $payload): bool {
     $config = $this->configFactory->get('autotix.settings');
-    $url = $config->get('webhook_url');
-
-    if (empty($url)) {
-      throw new \RuntimeException('Autotix webhook URL is not configured');
-    }
+    $url = static::WEBHOOK_URL;
 
     try {
       $body = json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);

@@ -5,9 +5,6 @@ autotix.settings:
     enabled:
       type: boolean
       label: 'Enabled'
-    webhook_url:
-      type: string
-      label: 'Webhook URL'
     auth_method:
       type: string
       label: 'Authentication method'
