@@ -211,6 +211,20 @@ class SettingsForm extends ConfigFormBase {
       '#description' => $this->t('How long to wait for the Autotix endpoint to respond.'),
     ];
 
+    // Webhook delivery status widget (loaded via JS).
+    $form['status_widget'] = [
+      '#type' => 'container',
+      '#attributes' => ['data-autotix-status' => TRUE],
+      '#attached' => [
+        'library' => ['autotix/status'],
+        'drupalSettings' => [
+          'autotix' => [
+            'statusEndpoint' => '/admin/config/services/autotix/status',
+          ],
+        ],
+      ],
+    ];
+
     // Links to test and push pages.
     $form['test_link'] = [
       '#type' => 'link',

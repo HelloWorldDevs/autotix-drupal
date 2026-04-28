@@ -1,0 +1,8 @@
+status:
+  version: 1.x
+  js:
+    js/autotix-status.js: {}
+  dependencies:
+    - core/drupal
+    - core/drupalSettings
+    - core/once

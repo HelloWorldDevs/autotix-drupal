@@ -21,3 +21,10 @@ autotix.push_error:
     _title: 'Push Custom Error'
   requirements:
     _permission: 'administer autotix'
+
+autotix.status:
+  path: '/admin/config/services/autotix/status'
+  defaults:
+    _controller: '\Drupal\autotix\Controller\StatusController::get'
+  requirements:
+    _permission: 'administer autotix'
