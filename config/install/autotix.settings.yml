@@ -1,7 +1,7 @@
 enabled: false
 auth_method: 'token'
-auth_token: ''
-auth_secret: ''
+auth_token_key: ''
+auth_secret_key: ''
 send_immediately: false
 severity_threshold: 3
 environment: 'production'

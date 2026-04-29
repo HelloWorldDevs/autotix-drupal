@@ -5,6 +5,7 @@ namespace Drupal\Tests\autotix\Unit\Service;
 use Drupal\autotix\Service\WebhookClient;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Config\ImmutableConfig;
+use Drupal\key\KeyRepositoryInterface;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\ConnectException;
 use GuzzleHttp\Psr7\Request;
@@ -19,6 +20,7 @@ class WebhookClientTest extends TestCase {
   private Client $httpClient;
   private ConfigFactoryInterface $configFactory;
   private ImmutableConfig $config;
+  private KeyRepositoryInterface $keyRepository;
   private WebhookClient $client;
 
   /**
@@ -27,10 +29,16 @@ class WebhookClientTest extends TestCase {
   private array $configValues = [
     'timeout' => 20,
     'auth_method' => 'none',
-    'auth_token' => '',
-    'auth_secret' => '',
+    'auth_token_key' => '',
+    'auth_secret_key' => '',
     'debug' => FALSE,
   ];
+
+  /**
+   * Stubbed Key entities, keyed by ID. Each stored value becomes the return
+   * value of getKeyValue() on the matching Key mock.
+   */
+  private array $keyValues = [];
 
   protected function setUp(): void {
     parent::setUp();
@@ -42,6 +50,7 @@ class WebhookClientTest extends TestCase {
     $this->httpClient = $this->createMock(Client::class);
     $this->config = $this->createMock(ImmutableConfig::class);
     $this->configFactory = $this->createMock(ConfigFactoryInterface::class);
+    $this->keyRepository = $this->createMock(KeyRepositoryInterface::class);
 
     $this->config->method('get')->willReturnCallback(
       fn(string $key) => $this->configValues[$key] ?? NULL
@@ -50,7 +59,24 @@ class WebhookClientTest extends TestCase {
       ->with('autotix.settings')
       ->willReturn($this->config);
 
-    $this->client = new WebhookClient($this->httpClient, $this->configFactory);
+    // KeyRepository::getKey($id) returns a stub Key whose getKeyValue()
+    // returns whatever's in $this->keyValues[$id], or null when missing.
+    $this->keyRepository->method('getKey')->willReturnCallback(function ($id) {
+      if (!array_key_exists($id, $this->keyValues)) {
+        return NULL;
+      }
+      $value = $this->keyValues[$id];
+      return new class($value) {
+        public function __construct(private mixed $value) {}
+        public function getKeyValue() { return $this->value; }
+      };
+    });
+
+    $this->client = new WebhookClient(
+      $this->httpClient,
+      $this->configFactory,
+      $this->keyRepository,
+    );
 
     \Drupal::resetLoggerEntries();
   }
@@ -99,7 +125,8 @@ class WebhookClientTest extends TestCase {
    */
   public function testTokenAuthSetsHeader(): void {
     $this->configValues['auth_method'] = 'token';
-    $this->configValues['auth_token'] = 'my-secret-token';
+    $this->configValues['auth_token_key'] = 'autotix_token';
+    $this->keyValues['autotix_token'] = 'my-secret-token';
 
     $this->httpClient->expects($this->once())
       ->method('post')
@@ -117,7 +144,8 @@ class WebhookClientTest extends TestCase {
    */
   public function testHmacAuthSetsSignatureHeader(): void {
     $this->configValues['auth_method'] = 'hmac';
-    $this->configValues['auth_secret'] = 'hmac-secret';
+    $this->configValues['auth_secret_key'] = 'autotix_hmac';
+    $this->keyValues['autotix_hmac'] = 'hmac-secret';
 
     $payload = ['message' => 'test'];
     $expectedBody = json_encode($payload, JSON_UNESCAPED_SLASHES);
@@ -137,9 +165,10 @@ class WebhookClientTest extends TestCase {
   /**
    * @covers ::send
    */
-  public function testEnvVarOverridesConfigToken(): void {
+  public function testEnvVarOverridesKeyToken(): void {
     $this->configValues['auth_method'] = 'token';
-    $this->configValues['auth_token'] = 'config-token';
+    $this->configValues['auth_token_key'] = 'autotix_token';
+    $this->keyValues['autotix_token'] = 'key-token';
     putenv('AUTOTIX_AUTH_TOKEN=env-token');
 
     $this->httpClient->expects($this->once())
@@ -156,9 +185,10 @@ class WebhookClientTest extends TestCase {
   /**
    * @covers ::send
    */
-  public function testEnvVarOverridesConfigHmacSecret(): void {
+  public function testEnvVarOverridesKeyHmacSecret(): void {
     $this->configValues['auth_method'] = 'hmac';
-    $this->configValues['auth_secret'] = 'config-secret';
+    $this->configValues['auth_secret_key'] = 'autotix_hmac';
+    $this->keyValues['autotix_hmac'] = 'key-secret';
     putenv('AUTOTIX_HMAC_SECRET=env-secret');
 
     $payload = ['message' => 'test'];
@@ -174,6 +204,28 @@ class WebhookClientTest extends TestCase {
       ->willReturn(new Response(200));
 
     $this->client->send($payload);
+  }
+
+  /**
+   * @covers ::send
+   * @covers ::resolveKey
+   */
+  public function testMissingKeyEntityYieldsNoAuthHeader(): void {
+    $this->configValues['auth_method'] = 'token';
+    $this->configValues['auth_token_key'] = 'nonexistent';
+    // Note: keyValues is empty, so getKey() returns NULL.
+
+    $this->httpClient->expects($this->once())
+      ->method('post')
+      ->with(
+        $this->anything(),
+        $this->callback(
+          fn(array $opts) => !isset($opts['headers']['X-Webhook-Token'])
+        )
+      )
+      ->willReturn(new Response(200));
+
+    $this->client->send(['message' => 'test']);
   }
 
   /**
@@ -254,13 +306,25 @@ class WebhookClientTest extends TestCase {
       $this->fail('Expected RuntimeException');
     }
     catch (\RuntimeException $e) {
-      // Exception should still be thrown.
       $this->assertStringContainsString('HTTP 500', $e->getMessage());
     }
 
-    // No debug logs should be produced.
+    // The warning is always logged (status + url, no body); the debug
+    // response-body log must NOT appear when debug is off.
     $logs = \Drupal::getLoggerEntries();
-    $this->assertEmpty($logs, 'No log entries should exist when debug is off');
+    $debug_entries = array_filter($logs, fn(array $l): bool => $l['level'] === 'debug');
+    $this->assertEmpty(
+      $debug_entries,
+      'No debug-level entries should exist when debug is off'
+    );
+
+    // The warning entry should NOT contain the response body.
+    foreach ($logs as $entry) {
+      $this->assertStringNotContainsString(
+        'Internal Server Error',
+        $entry['message'] . ' ' . json_encode($entry['context'])
+      );
+    }
   }
 
   /**
@@ -280,7 +344,7 @@ class WebhookClientTest extends TestCase {
   /**
    * @covers ::send
    */
-  public function testDebugDisabledProducesNoLogEntries(): void {
+  public function testDebugDisabledProducesNoDebugEntries(): void {
     $this->configValues['debug'] = FALSE;
 
     $this->httpClient->method('post')
@@ -288,14 +352,17 @@ class WebhookClientTest extends TestCase {
 
     $this->client->send(['message' => 'test']);
 
+    // The "delivered" info entry is always written; only debug-level entries
+    // are gated on the debug flag.
     $logs = \Drupal::getLoggerEntries();
-    $this->assertEmpty($logs, 'No log entries should be produced when debug is disabled');
+    $debug_entries = array_filter($logs, fn(array $l): bool => $l['level'] === 'debug');
+    $this->assertEmpty($debug_entries, 'No debug-level entries when debug is disabled');
   }
 
   /**
    * @covers ::send
    */
-  public function testDebugEnabledProducesLogEntries(): void {
+  public function testDebugEnabledProducesDebugEntries(): void {
     $this->configValues['debug'] = TRUE;
 
     $this->httpClient->method('post')
@@ -303,10 +370,11 @@ class WebhookClientTest extends TestCase {
 
     $this->client->send(['source' => 'drupal', 'message' => 'test', 'url' => 'https://example.com', 'level' => 'error']);
 
+    // 2 debug entries (send + response) + 1 always-on info entry (delivered).
     $logs = \Drupal::getLoggerEntries();
-    $this->assertCount(2, $logs, 'Two debug log entries expected (send + response)');
-    $this->assertSame('autotix_internal', $logs[0]['channel']);
-    $this->assertSame('debug', $logs[0]['level']);
+    $debug_entries = array_values(array_filter($logs, fn(array $l): bool => $l['level'] === 'debug'));
+    $this->assertCount(2, $debug_entries, 'Two debug entries expected (send + response)');
+    $this->assertSame('autotix_internal', $debug_entries[0]['channel']);
   }
 
   /**
@@ -314,8 +382,10 @@ class WebhookClientTest extends TestCase {
    */
   public function testNoAuthHeadersWhenMethodIsNone(): void {
     $this->configValues['auth_method'] = 'none';
-    $this->configValues['auth_token'] = 'ignored';
-    $this->configValues['auth_secret'] = 'ignored';
+    $this->configValues['auth_token_key'] = 'autotix_token';
+    $this->configValues['auth_secret_key'] = 'autotix_hmac';
+    $this->keyValues['autotix_token'] = 'ignored';
+    $this->keyValues['autotix_hmac'] = 'ignored';
 
     $this->httpClient->expects($this->once())
       ->method('post')

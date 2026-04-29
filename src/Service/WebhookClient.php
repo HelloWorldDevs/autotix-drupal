@@ -3,6 +3,7 @@
 namespace Drupal\autotix\Service;
 
 use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\key\KeyRepositoryInterface;
 use GuzzleHttp\ClientInterface;
 
 /**
@@ -15,10 +16,16 @@ class WebhookClient {
 
   protected ClientInterface $httpClient;
   protected ConfigFactoryInterface $configFactory;
+  protected KeyRepositoryInterface $keyRepository;
 
-  public function __construct(ClientInterface $http_client, ConfigFactoryInterface $config_factory) {
+  public function __construct(
+    ClientInterface $http_client,
+    ConfigFactoryInterface $config_factory,
+    KeyRepositoryInterface $key_repository,
+  ) {
     $this->httpClient = $http_client;
     $this->configFactory = $config_factory;
+    $this->keyRepository = $key_repository;
   }
 
   /**
@@ -55,11 +62,13 @@ class WebhookClient {
       ],
     ];
 
-    // Authentication — prefer environment variables over config so secrets
-    // don't have to live in exportable config / the database.
+    // Authentication — env vars still win (back-compat for existing setups);
+    // otherwise look up the configured drupal/key Key entity. Storing secrets
+    // in Key entities (with file/env provider) keeps them out of exportable
+    // config / the database.
     $auth_method = $config->get('auth_method') ?? 'token';
-    $token = getenv('AUTOTIX_AUTH_TOKEN') ?: $config->get('auth_token');
-    $secret = getenv('AUTOTIX_HMAC_SECRET') ?: $config->get('auth_secret');
+    $token = getenv('AUTOTIX_AUTH_TOKEN') ?: $this->resolveKey($config->get('auth_token_key'));
+    $secret = getenv('AUTOTIX_HMAC_SECRET') ?: $this->resolveKey($config->get('auth_secret_key'));
 
     if ($auth_method === 'token' && $token) {
       $options['headers']['X-Webhook-Token'] = $token;
@@ -134,6 +143,21 @@ class WebhookClient {
     );
 
     return TRUE;
+  }
+
+  /**
+   * Resolve a Key entity ID to its raw value, or NULL if missing.
+   */
+  protected function resolveKey(?string $key_id): ?string {
+    if (empty($key_id)) {
+      return NULL;
+    }
+    $key = $this->keyRepository->getKey($key_id);
+    if (!$key) {
+      return NULL;
+    }
+    $value = $key->getKeyValue();
+    return is_string($value) && $value !== '' ? $value : NULL;
   }
 
 }

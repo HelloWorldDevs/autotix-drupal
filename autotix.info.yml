@@ -4,3 +4,5 @@ description: 'Sends Drupal watchdog log errors to Autotix for automated ticket c
 core_version_requirement: ^10.3 || ^11
 package: Development
 configure: autotix.settings_form
+dependencies:
+  - key:key

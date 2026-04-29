@@ -8,12 +8,12 @@ autotix.settings:
     auth_method:
       type: string
       label: 'Authentication method'
-    auth_token:
+    auth_token_key:
       type: string
-      label: 'Auth token'
-    auth_secret:
+      label: 'Auth token Key entity ID'
+    auth_secret_key:
       type: string
-      label: 'HMAC secret'
+      label: 'HMAC secret Key entity ID'
     send_immediately:
       type: boolean
       label: 'Send errors immediately'

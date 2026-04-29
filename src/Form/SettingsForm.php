@@ -56,19 +56,21 @@ class SettingsForm extends ConfigFormBase {
     ];
 
     $has_token_env = !empty(getenv('AUTOTIX_AUTH_TOKEN'));
-    $has_token_config = !empty($config->get('auth_token'));
-    $token_description = $this->t('Your Autotix webhook token. Can also be set via the <code>AUTOTIX_AUTH_TOKEN</code> environment variable (recommended).');
+    $token_description = $this->t(
+      'Pick a Key entity that holds your Autotix webhook token. Manage Keys at <a href=":url">/admin/config/system/keys</a>. The <code>AUTOTIX_AUTH_TOKEN</code> environment variable still takes precedence if set.',
+      [':url' => Url::fromRoute('entity.key.collection')->toString()]
+    );
     if ($has_token_env) {
-      $token_description .= ' ' . $this->t('<strong>Currently provided by environment variable.</strong>');
-    }
-    elseif ($has_token_config) {
-      $token_description .= ' ' . $this->t('<em>A value is saved. Leave blank to keep it.</em>');
+      $token_description .= ' ' . $this->t('<strong>Currently provided by environment variable — this Key selection is ignored.</strong>');
     }
 
-    $form['auth']['auth_token'] = [
-      '#type' => 'password',
-      '#title' => $this->t('Auth token'),
+    $form['auth']['auth_token_key'] = [
+      '#type' => 'key_select',
+      '#title' => $this->t('Auth token Key'),
+      '#default_value' => $config->get('auth_token_key') ?? '',
       '#description' => $token_description,
+      '#empty_option' => $this->t('- None -'),
+      '#key_filters' => ['type' => 'authentication'],
       '#states' => [
         'visible' => [
           ':input[name="auth_method"]' => ['value' => 'token'],
@@ -76,52 +78,27 @@ class SettingsForm extends ConfigFormBase {
       ],
     ];
 
-    if ($has_token_config && !$has_token_env) {
-      $form['auth']['clear_auth_token'] = [
-        '#type' => 'checkbox',
-        '#title' => $this->t('Clear saved auth token'),
-        '#default_value' => FALSE,
-        '#states' => [
-          'visible' => [
-            ':input[name="auth_method"]' => ['value' => 'token'],
-          ],
-        ],
-      ];
-    }
-
     $has_secret_env = !empty(getenv('AUTOTIX_HMAC_SECRET'));
-    $has_secret_config = !empty($config->get('auth_secret'));
-    $secret_description = $this->t('The HMAC signing secret. Can also be set via the <code>AUTOTIX_HMAC_SECRET</code> environment variable (recommended).');
+    $secret_description = $this->t(
+      'Pick a Key entity that holds your HMAC signing secret. The <code>AUTOTIX_HMAC_SECRET</code> environment variable still takes precedence if set.'
+    );
     if ($has_secret_env) {
-      $secret_description .= ' ' . $this->t('<strong>Currently provided by environment variable.</strong>');
-    }
-    elseif ($has_secret_config) {
-      $secret_description .= ' ' . $this->t('<em>A value is saved. Leave blank to keep it.</em>');
+      $secret_description .= ' ' . $this->t('<strong>Currently provided by environment variable — this Key selection is ignored.</strong>');
     }
 
-    $form['auth']['auth_secret'] = [
-      '#type' => 'password',
-      '#title' => $this->t('HMAC secret'),
+    $form['auth']['auth_secret_key'] = [
+      '#type' => 'key_select',
+      '#title' => $this->t('HMAC secret Key'),
+      '#default_value' => $config->get('auth_secret_key') ?? '',
       '#description' => $secret_description,
+      '#empty_option' => $this->t('- None -'),
+      '#key_filters' => ['type' => 'authentication'],
       '#states' => [
         'visible' => [
           ':input[name="auth_method"]' => ['value' => 'hmac'],
         ],
       ],
     ];
-
-    if ($has_secret_config && !$has_secret_env) {
-      $form['auth']['clear_auth_secret'] = [
-        '#type' => 'checkbox',
-        '#title' => $this->t('Clear saved HMAC secret'),
-        '#default_value' => FALSE,
-        '#states' => [
-          'visible' => [
-            ':input[name="auth_method"]' => ['value' => 'hmac'],
-          ],
-        ],
-      ];
-    }
 
     $form['delivery'] = [
       '#type' => 'details',
@@ -240,41 +217,19 @@ class SettingsForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state): void {
-    $settings = $this->config('autotix.settings')
+    $this->config('autotix.settings')
       ->set('enabled', (bool) $form_state->getValue('enabled'))
       ->set('auth_method', $form_state->getValue('auth_method'))
+      ->set('auth_token_key', $form_state->getValue('auth_token_key') ?? '')
+      ->set('auth_secret_key', $form_state->getValue('auth_secret_key') ?? '')
       ->set('send_immediately', (bool) $form_state->getValue('send_immediately'))
       ->set('severity_threshold', (int) $form_state->getValue('severity_threshold'))
       ->set('dedup_window', (int) $form_state->getValue('dedup_window'))
       ->set('environment', $form_state->getValue('environment'))
       ->set('include_backtrace', (bool) $form_state->getValue('include_backtrace'))
       ->set('debug', (bool) $form_state->getValue('debug'))
-      ->set('timeout', (int) $form_state->getValue('timeout'));
-
-    // Only overwrite secrets when a new value is entered (password fields
-    // are always submitted empty when the user doesn't touch them).
-    // Explicit "clear" checkboxes allow admins to remove stored secrets.
-    if ($form_state->getValue('clear_auth_token')) {
-      $settings->set('auth_token', '');
-    }
-    else {
-      $token = $form_state->getValue('auth_token');
-      if (!empty($token)) {
-        $settings->set('auth_token', $token);
-      }
-    }
-
-    if ($form_state->getValue('clear_auth_secret')) {
-      $settings->set('auth_secret', '');
-    }
-    else {
-      $secret = $form_state->getValue('auth_secret');
-      if (!empty($secret)) {
-        $settings->set('auth_secret', $secret);
-      }
-    }
-
-    $settings->save();
+      ->set('timeout', (int) $form_state->getValue('timeout'))
+      ->save();
 
     parent::submitForm($form, $form_state);
   }

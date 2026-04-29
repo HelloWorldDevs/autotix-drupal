@@ -229,3 +229,12 @@ namespace {
     }
   }
 }
+
+namespace Drupal\key {
+
+  if (!interface_exists('Drupal\key\KeyRepositoryInterface')) {
+    interface KeyRepositoryInterface {
+      public function getKey($key_id);
+    }
+  }
+}

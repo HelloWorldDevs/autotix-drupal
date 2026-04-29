@@ -2,12 +2,88 @@
 
 /**
  * @file
- * Install/uninstall hooks for Autotix.
+ * Install/uninstall/update hooks for Autotix.
  */
+
+use Drupal\key\Entity\Key;
 
 /**
  * Implements hook_uninstall().
  */
 function autotix_uninstall() {
   \Drupal::configFactory()->getEditable('autotix.settings')->delete();
+}
+
+/**
+ * Migrate plain-text auth_token / auth_secret into drupal/key Key entities.
+ *
+ * Stops storing webhook secrets in the exportable autotix.settings config
+ * (which can leak into config/sync, version control, or DB exports). Any
+ * non-empty value found in config is moved into a new Key entity using the
+ * "config" provider as a transparent first step — admins can then re-create
+ * the Key with a "file" or "env" provider via the Key admin UI.
+ *
+ * Renames the config keys from `auth_token`/`auth_secret` to
+ * `auth_token_key`/`auth_secret_key` and stores the Key entity ID instead
+ * of the raw secret. The original plain-text fields are then cleared.
+ */
+function autotix_update_10001() {
+  $config = \Drupal::configFactory()->getEditable('autotix.settings');
+
+  // Only run if the Key module is installed (it should be — it's a hard
+  // dependency now, but be defensive in case the update runs before that).
+  if (!\Drupal::moduleHandler()->moduleExists('key')) {
+    return t('Skipped: drupal/key module is not installed. Re-run after enabling it.');
+  }
+
+  $messages = [];
+
+  foreach (
+    [
+      ['source' => 'auth_token', 'target' => 'auth_token_key', 'id_prefix' => 'autotix_token'],
+      ['source' => 'auth_secret', 'target' => 'auth_secret_key', 'id_prefix' => 'autotix_hmac_secret'],
+    ] as $field
+  ) {
+    $value = $config->get($field['source']);
+    if (empty($value)) {
+      // Nothing to migrate — just rename the field to its new key.
+      $config->clear($field['source']);
+      $config->set($field['target'], '');
+      continue;
+    }
+
+    // Find a unique Key ID (in case multiple migrations have run).
+    $base_id = $field['id_prefix'];
+    $id = $base_id;
+    $i = 1;
+    while (Key::load($id)) {
+      $id = $base_id . '_' . $i++;
+    }
+
+    $key = Key::create([
+      'id' => $id,
+      'label' => 'Autotix ' . str_replace('_', ' ', $field['source']),
+      'description' => 'Auto-migrated from autotix.settings config. Consider switching this Key to the file or env provider for better security.',
+      'key_type' => 'authentication',
+      'key_provider' => 'config',
+      'key_provider_settings' => ['key_value' => $value],
+      'key_input' => 'text_field',
+    ]);
+    $key->save();
+
+    $config->clear($field['source']);
+    $config->set($field['target'], $id);
+
+    $messages[] = "Migrated {$field['source']} into Key entity '{$id}'.";
+  }
+
+  $config->save();
+
+  if (empty($messages)) {
+    return t('No plain-text Autotix secrets found in config — renamed config keys only.');
+  }
+
+  return t('Autotix secrets migrated to Key entities: @msgs Review the new Keys at /admin/config/system/keys and consider switching their provider to "file" or "env" for stronger security.', [
+    '@msgs' => implode(' ', $messages),
+  ]);
 }
