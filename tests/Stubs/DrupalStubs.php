@@ -238,3 +238,13 @@ namespace Drupal\key {
     }
   }
 }
+
+namespace Drupal\Core\State {
+
+  if (!interface_exists('Drupal\Core\State\StateInterface')) {
+    interface StateInterface {
+      public function get($key, $default = NULL);
+      public function set($key, $value);
+    }
+  }
+}

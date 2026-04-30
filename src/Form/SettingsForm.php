@@ -188,7 +188,9 @@ class SettingsForm extends ConfigFormBase {
         'library' => ['autotix/status'],
         'drupalSettings' => [
           'autotix' => [
-            'statusEndpoint' => '/admin/config/services/autotix/status',
+            // Generated from the route so language prefixes / path aliases
+            // are respected automatically.
+            'statusEndpoint' => Url::fromRoute('autotix.status')->toString(),
           ],
         ],
       ],

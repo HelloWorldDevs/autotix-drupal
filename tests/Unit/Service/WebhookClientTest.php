@@ -5,6 +5,7 @@ namespace Drupal\Tests\autotix\Unit\Service;
 use Drupal\autotix\Service\WebhookClient;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Config\ImmutableConfig;
+use Drupal\Core\State\StateInterface;
 use Drupal\key\KeyRepositoryInterface;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\ConnectException;
@@ -21,6 +22,9 @@ class WebhookClientTest extends TestCase {
   private ConfigFactoryInterface $configFactory;
   private ImmutableConfig $config;
   private KeyRepositoryInterface $keyRepository;
+  private StateInterface $state;
+  /** In-memory state backing for the State mock. */
+  private array $stateValues = [];
   private WebhookClient $client;
 
   /**
@@ -72,10 +76,21 @@ class WebhookClientTest extends TestCase {
       };
     });
 
+    // In-memory State stub so we can also assert delivery counters / status.
+    $this->stateValues = [];
+    $this->state = $this->createMock(StateInterface::class);
+    $this->state->method('get')->willReturnCallback(
+      fn(string $key, $default = NULL) => $this->stateValues[$key] ?? $default
+    );
+    $this->state->method('set')->willReturnCallback(function (string $key, $value): void {
+      $this->stateValues[$key] = $value;
+    });
+
     $this->client = new WebhookClient(
       $this->httpClient,
       $this->configFactory,
       $this->keyRepository,
+      $this->state,
     );
 
     \Drupal::resetLoggerEntries();
@@ -399,6 +414,42 @@ class WebhookClientTest extends TestCase {
       ->willReturn(new Response(200));
 
     $this->client->send(['message' => 'test']);
+  }
+
+  /**
+   * @covers ::send
+   * @covers ::recordOutcome
+   */
+  public function testSuccessfulSendUpdatesStateCounters(): void {
+    $this->stateValues['autotix.total_delivered'] = 4;
+    $this->httpClient->method('post')->willReturn(new Response(200));
+
+    $this->client->send(['message' => 'test']);
+
+    $this->assertSame('ok', $this->stateValues['autotix.last_status']);
+    $this->assertSame(5, $this->stateValues['autotix.total_delivered']);
+    $this->assertIsInt($this->stateValues['autotix.last_delivery_at']);
+  }
+
+  /**
+   * @covers ::send
+   * @covers ::recordOutcome
+   */
+  public function testFailedSendUpdatesFailureCountersBeforeThrowing(): void {
+    $this->stateValues['autotix.total_failed'] = 2;
+    $this->httpClient->method('post')->willReturn(new Response(500, [], 'oops'));
+
+    try {
+      $this->client->send(['message' => 'test']);
+      $this->fail('Expected RuntimeException');
+    }
+    catch (\RuntimeException) {
+      // Expected.
+    }
+
+    $this->assertSame('failed', $this->stateValues['autotix.last_status']);
+    $this->assertSame(3, $this->stateValues['autotix.total_failed']);
+    $this->assertIsInt($this->stateValues['autotix.last_delivery_at']);
   }
 
 }

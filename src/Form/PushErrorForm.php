@@ -18,9 +18,12 @@ use Symfony\Component\HttpFoundation\RequestStack;
  */
 class PushErrorForm extends FormBase {
 
+  // Note: $configFactory and $requestStack are inherited from FormBase
+  // (untyped). We use FormBase's setters so we don't conflict with the
+  // parent class's property declarations on PHP 8.2+.
   protected QueueFactory $queueFactory;
-  protected WebhookClient $webhookClient;
   protected AccountProxyInterface $currentUser;
+  protected WebhookClient $webhookClient;
 
   public function __construct(
     QueueFactory $queue_factory,
@@ -30,9 +33,9 @@ class PushErrorForm extends FormBase {
     WebhookClient $webhook_client,
   ) {
     $this->queueFactory = $queue_factory;
-    $this->configFactory = $config_factory;
+    $this->setConfigFactory($config_factory);
     $this->currentUser = $current_user;
-    $this->requestStack = $request_stack;
+    $this->setRequestStack($request_stack);
     $this->webhookClient = $webhook_client;
   }
 

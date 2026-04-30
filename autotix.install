@@ -17,15 +17,23 @@ function autotix_uninstall() {
 /**
  * Migrate plain-text auth_token / auth_secret into drupal/key Key entities.
  *
- * Stops storing webhook secrets in the exportable autotix.settings config
- * (which can leak into config/sync, version control, or DB exports). Any
- * non-empty value found in config is moved into a new Key entity using the
- * "config" provider as a transparent first step — admins can then re-create
- * the Key with a "file" or "env" provider via the Key admin UI.
+ * Replaces the raw `auth_token` / `auth_secret` strings in autotix.settings
+ * with `auth_token_key` / `auth_secret_key` Key entity IDs.
  *
- * Renames the config keys from `auth_token`/`auth_secret` to
- * `auth_token_key`/`auth_secret_key` and stores the Key entity ID instead
- * of the raw secret. The original plain-text fields are then cleared.
+ * Note: this initial migration creates Key entities using drupal/key's
+ * `config` provider, which still stores the raw value inside Drupal's
+ * configuration system (so it CAN still appear in config/sync exports).
+ * The migration is a transparent renaming step — once the new Key entity
+ * exists, admins should re-create or re-configure it with a stronger
+ * provider (`file` or `env`) at /admin/config/system/keys to actually keep
+ * the secret out of exportable config.
+ *
+ * Safety:
+ *  - If the new `auth_token_key` / `auth_secret_key` setting is already
+ *    populated (e.g. someone deployed the new code and configured Keys
+ *    BEFORE running drush updb), we leave it alone and only clear the
+ *    legacy field.
+ *  - The legacy field is always cleared so it can't drift.
  */
 function autotix_update_10001() {
   $config = \Drupal::configFactory()->getEditable('autotix.settings');
@@ -45,10 +53,22 @@ function autotix_update_10001() {
     ] as $field
   ) {
     $value = $config->get($field['source']);
+    $existing_target = $config->get($field['target']);
+
     if (empty($value)) {
-      // Nothing to migrate — just rename the field to its new key.
+      // Nothing to migrate. Drop the legacy field, but DO NOT overwrite an
+      // already-configured Key ID on the new setting.
       $config->clear($field['source']);
-      $config->set($field['target'], '');
+      if ($existing_target === NULL) {
+        $config->set($field['target'], '');
+      }
+      continue;
+    }
+
+    // Don't clobber a Key ID the admin has already configured.
+    if (!empty($existing_target)) {
+      $config->clear($field['source']);
+      $messages[] = "Cleared legacy {$field['source']} (existing {$field['target']} kept).";
       continue;
     }
 
@@ -63,7 +83,7 @@ function autotix_update_10001() {
     $key = Key::create([
       'id' => $id,
       'label' => 'Autotix ' . str_replace('_', ' ', $field['source']),
-      'description' => 'Auto-migrated from autotix.settings config. Consider switching this Key to the file or env provider for better security.',
+      'description' => 'Auto-migrated from autotix.settings config. The raw value still lives in config until you switch this Key to the "file" or "env" provider at /admin/config/system/keys.',
       'key_type' => 'authentication',
       'key_provider' => 'config',
       'key_provider_settings' => ['key_value' => $value],
@@ -83,7 +103,7 @@ function autotix_update_10001() {
     return t('No plain-text Autotix secrets found in config — renamed config keys only.');
   }
 
-  return t('Autotix secrets migrated to Key entities: @msgs Review the new Keys at /admin/config/system/keys and consider switching their provider to "file" or "env" for stronger security.', [
+  return t('Autotix secrets migrated to Key entities: @msgs The Key values are still stored in config until you switch each Key to the "file" or "env" provider at /admin/config/system/keys — do that to actually keep secrets out of exportable config.', [
     '@msgs' => implode(' ', $messages),
   ]);
 }

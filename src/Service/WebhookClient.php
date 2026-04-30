@@ -3,6 +3,7 @@
 namespace Drupal\autotix\Service;
 
 use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\Core\State\StateInterface;
 use Drupal\key\KeyRepositoryInterface;
 use GuzzleHttp\ClientInterface;
 
@@ -17,15 +18,18 @@ class WebhookClient {
   protected ClientInterface $httpClient;
   protected ConfigFactoryInterface $configFactory;
   protected KeyRepositoryInterface $keyRepository;
+  protected StateInterface $state;
 
   public function __construct(
     ClientInterface $http_client,
     ConfigFactoryInterface $config_factory,
     KeyRepositoryInterface $key_repository,
+    StateInterface $state,
   ) {
     $this->httpClient = $http_client;
     $this->configFactory = $config_factory;
     $this->keyRepository = $key_repository;
+    $this->state = $state;
   }
 
   /**
@@ -128,6 +132,7 @@ class WebhookClient {
         ]
       );
 
+      $this->recordOutcome('failed');
       throw new \RuntimeException("Autotix webhook returned HTTP {$status}.");
     }
 
@@ -142,7 +147,24 @@ class WebhookClient {
       ]
     );
 
+    $this->recordOutcome('ok');
+
     return TRUE;
+  }
+
+  /**
+   * Persist the outcome of a delivery attempt for the status widget.
+   */
+  protected function recordOutcome(string $status): void {
+    try {
+      $this->state->set('autotix.last_status', $status);
+      $this->state->set('autotix.last_delivery_at', time());
+      $counter_key = $status === 'ok' ? 'autotix.total_delivered' : 'autotix.total_failed';
+      $this->state->set($counter_key, ((int) $this->state->get($counter_key, 0)) + 1);
+    }
+    catch (\Throwable) {
+      // State writes must never break delivery; swallow any errors.
+    }
   }
 
   /**

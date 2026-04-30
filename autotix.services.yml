@@ -15,6 +15,7 @@ services:
       - '@http_client'
       - '@config.factory'
       - '@key.repository'
+      - '@state'
 
   autotix.deduplication:
     class: Drupal\autotix\Service\DeduplicationService

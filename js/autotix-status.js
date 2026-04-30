@@ -19,25 +19,46 @@
   }
 
   /**
-   * Render the status summary into the container element.
+   * Whitelist of known status values. Anything else falls back to "unknown".
+   */
+  const KNOWN_STATUSES = ['ok', 'failed', 'unknown'];
+
+  /**
+   * Render the status summary into the container element using DOM APIs
+   * (textContent only) so values from the endpoint can't inject HTML.
    */
   function renderStatus(container, data) {
-    const statusLabel = data.status.toUpperCase();
+    const rawStatus =
+      typeof data.status === 'string' && data.status.trim()
+        ? data.status.trim().toLowerCase()
+        : 'unknown';
+    const status = KNOWN_STATUSES.includes(rawStatus) ? rawStatus : 'unknown';
+
     const lastDelivery = data.lastDeliveryAt
       ? timeAgo(data.lastDeliveryAt)
       : 'never';
+    const totalDelivered = Number(data.totalDelivered) || 0;
+    const totalFailed = Number(data.totalFailed) || 0;
 
-    const html = `
-      <div class="autotix-status autotix-status--${data.status}">
-        <span class="autotix-status__label">${statusLabel}</span>
-        <span class="autotix-status__detail">
-          ${data.totalDelivered} delivered &middot; ${data.totalFailed} failed
-          &middot; last: ${lastDelivery}
-        </span>
-      </div>
-    `;
+    container.replaceChildren();
 
-    container.innerHTML = html;
+    const wrapper = document.createElement('div');
+    wrapper.className = 'autotix-status autotix-status--' + status;
+
+    const label = document.createElement('span');
+    label.className = 'autotix-status__label';
+    label.textContent = status.toUpperCase();
+    wrapper.appendChild(label);
+
+    const detail = document.createElement('span');
+    detail.className = 'autotix-status__detail';
+    detail.textContent =
+      totalDelivered + ' delivered · ' +
+      totalFailed + ' failed · last: ' +
+      lastDelivery;
+    wrapper.appendChild(detail);
+
+    container.appendChild(wrapper);
   }
 
   Drupal.behaviors.autotixStatus = {
@@ -53,8 +74,11 @@
               renderStatus(el, data);
             })
             .catch(function (err) {
-              el.innerHTML =
-                '<em class="color-warning">Could not load status.</em>';
+              el.replaceChildren();
+              const em = document.createElement('em');
+              em.className = 'color-warning';
+              em.textContent = 'Could not load status.';
+              el.appendChild(em);
               console.error('Autotix status fetch failed:', err);
             });
         }
