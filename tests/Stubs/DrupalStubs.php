@@ -248,3 +248,18 @@ namespace Drupal\Core\State {
     }
   }
 }
+
+namespace Drupal\Core\Logger {
+
+  if (!interface_exists('Drupal\Core\Logger\LoggerChannelInterface')) {
+    // Minimal stub — the Drupal adapter only needs a PSR-3 logger interface
+    // for the SDK; the channel itself just needs to be passable around.
+    interface LoggerChannelInterface extends \Psr\Log\LoggerInterface {}
+  }
+
+  if (!interface_exists('Drupal\Core\Logger\LoggerChannelFactoryInterface')) {
+    interface LoggerChannelFactoryInterface {
+      public function get($channel);
+    }
+  }
+}

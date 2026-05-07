@@ -16,6 +16,7 @@ services:
       - '@config.factory'
       - '@key.repository'
       - '@state'
+      - '@logger.factory'
 
   autotix.deduplication:
     class: Drupal\autotix\Service\DeduplicationService
