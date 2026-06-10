@@ -4,11 +4,16 @@ namespace Drupal\autotix\Service;
 
 use Drupal\Core\Cache\CacheBackendInterface;
 use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\Core\DependencyInjection\DependencySerializationTrait;
 
 /**
  * Cache-based deduplication to avoid sending the same error repeatedly.
  */
 class DeduplicationService {
+
+  // Serialization-safe for the same reason as WebhookLogger/WebhookClient:
+  // this service is a WebhookLogger dependency and gets serialized with it.
+  use DependencySerializationTrait;
 
   protected CacheBackendInterface $cache;
   protected ConfigFactoryInterface $configFactory;

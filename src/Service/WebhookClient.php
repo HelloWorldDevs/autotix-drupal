@@ -5,6 +5,7 @@ namespace Drupal\autotix\Service;
 use Autotix\PhpSdk\StateRecorderInterface;
 use Autotix\PhpSdk\WebhookClient as CoreClient;
 use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\Core\DependencyInjection\DependencySerializationTrait;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\State\StateInterface;
 use Drupal\key\KeyRepositoryInterface;
@@ -23,6 +24,11 @@ use GuzzleHttp\Psr7\HttpFactory;
  * autotix/php-sdk so WordPress and Laravel inherit it for free.
  */
 class WebhookClient {
+
+  // $httpClient is Guzzle, whose handler stack is built from Closures —
+  // unserializable. This service rides along whenever WebhookLogger gets
+  // serialized (see comment there), so swap dependencies for service IDs.
+  use DependencySerializationTrait;
 
   protected ClientInterface $httpClient;
   protected ConfigFactoryInterface $configFactory;

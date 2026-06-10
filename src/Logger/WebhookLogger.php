@@ -3,6 +3,7 @@
 namespace Drupal\autotix\Logger;
 
 use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\Core\DependencyInjection\DependencySerializationTrait;
 use Drupal\Core\Logger\RfcLoggerTrait;
 use Drupal\Core\Queue\QueueFactory;
 use Drupal\autotix\Service\DeduplicationService;
@@ -16,6 +17,14 @@ use Psr\Log\LogLevel;
 class WebhookLogger implements LoggerInterface {
 
   use RfcLoggerTrait;
+  // Tagged loggers live inside every LoggerChannel, and LoggerChannel has
+  // no __sleep — so this object gets serialized whenever a channel does
+  // (e.g. Form API batches that stash $form_state holding a form object
+  // with a logger). Without this trait our real dependencies serialize
+  // too, and autotix.client drags in Guzzle's closure-based handler stack:
+  // "Serialization of 'Closure' is not allowed". The trait swaps injected
+  // services for their container IDs on sleep, exactly like core's DbLog.
+  use DependencySerializationTrait;
 
   /**
    * Map RFC 5424 severity integers to PSR-3 log level strings.

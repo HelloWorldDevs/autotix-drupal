@@ -89,6 +89,19 @@ namespace Drupal\Core\Plugin {
   }
 }
 
+// --- Drupal\Core\DependencyInjection ---
+
+namespace Drupal\Core\DependencyInjection {
+
+  if (!trait_exists('Drupal\Core\DependencyInjection\DependencySerializationTrait')) {
+    // No-op stand-in: the real trait swaps injected services for container
+    // IDs in __sleep/__wakeup. Unit tests never serialize these objects,
+    // they just need the trait to exist so the classes load.
+    trait DependencySerializationTrait {
+    }
+  }
+}
+
 // --- Drupal\Core\Logger ---
 
 namespace Drupal\Core\Logger {
