@@ -4,6 +4,10 @@
   "type": "drupal-module",
   "license": "GPL-2.0-or-later",
   "homepage": "https://autotix.io",
+  "support": {
+    "source": "https://github.com/HelloWorldDevs/autotix-drupal",
+    "issues": "https://github.com/HelloWorldDevs/autotix-drupal/issues"
+  },
   "authors": [
     {
       "name": "Hello World Devs",
