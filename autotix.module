@@ -8,6 +8,34 @@
 use Drupal\Core\Routing\RouteMatchInterface;
 
 /**
+ * Fallback autoloader for the bundled Autotix PHP SDK (lib/php-sdk/).
+ *
+ * The SDK normally arrives via Composer (autotix/php-sdk), but most sites
+ * install this module by copying the directory — no Composer step — so
+ * Autotix\PhpSdk\* would never resolve and the autotix.client service
+ * would fatal. If Composer DID provide the SDK, class_exists() succeeds
+ * and the bundled copy is ignored. The SDK only depends on PSR interfaces
+ * (http-client, http-message, log), all of which Drupal core ships.
+ *
+ * Keep lib/php-sdk/ in sync with packages/php-sdk/src in the monorepo —
+ * run drupal/autotix/bin/sync-sdk.sh (BundledSdkSyncTest enforces it).
+ */
+if (!class_exists('Autotix\PhpSdk\WebhookClient')) {
+  spl_autoload_register(function (string $class): void {
+    $prefix = 'Autotix\\PhpSdk\\';
+    if (!str_starts_with($class, $prefix)) {
+      return;
+    }
+    $file = __DIR__ . '/lib/php-sdk/'
+      . str_replace('\\', '/', substr($class, strlen($prefix)))
+      . '.php';
+    if (is_file($file)) {
+      require $file;
+    }
+  });
+}
+
+/**
  * Implements hook_help().
  */
 function autotix_help($route_name, RouteMatchInterface $route_match) {

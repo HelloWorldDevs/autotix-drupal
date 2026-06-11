@@ -12,8 +12,7 @@
     }
   ],
   "require": {
-    "php": ">=8.1",
-    "autotix/php-sdk": "^0.1"
+    "php": ">=8.1"
   },
   "repositories": [
     {
@@ -24,9 +23,11 @@
   ],
   "suggest": {
     "drupal/core": "^10.3 || ^11.0 (declared via .info.yml core_version_requirement; only listed here for Composer-managed Drupal sites)",
-    "drupal/key": "^1.18 (declared as a Drupal module dep via .info.yml; install when adding this module to a Drupal site)"
+    "drupal/key": "^1.18 (declared as a Drupal module dep via .info.yml; install when adding this module to a Drupal site)",
+    "autotix/php-sdk": "^0.1 (bundled in lib/php-sdk/ as a fallback; once published to Packagist, composer-managed sites can require it and the bundled copy is ignored)"
   },
   "require-dev": {
+    "autotix/php-sdk": "^0.1",
     "phpunit/phpunit": "^10.5 || ^11.0",
     "guzzlehttp/guzzle": "^7.0",
     "psr/log": "^3.0",
