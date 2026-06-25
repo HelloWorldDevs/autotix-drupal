@@ -50,6 +50,9 @@
   },
   "minimum-stability": "stable",
   "prefer-stable": true,
+  "extra": {
+    "installer-name": "autotix"
+  },
   "config": {
     "sort-packages": true
   }
