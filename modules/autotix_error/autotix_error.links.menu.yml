@@ -1,0 +1,5 @@
+autotix_error.trigger:
+  title: 'Forced Error Page'
+  description: 'Trigger a deliberate PHP error to test the Autotix pipeline end-to-end.'
+  route_name: autotix_error.trigger
+  parent: autotix.settings_form

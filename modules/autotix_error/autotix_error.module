@@ -1,0 +1,6 @@
+<?php
+
+/**
+ * @file
+ * Provides a deliberate test error endpoint for Autotix pipeline testing.
+ */

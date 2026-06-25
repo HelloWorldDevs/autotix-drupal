@@ -1,0 +1,9 @@
+autotix_error.trigger:
+  path: '/autotix-test-error'
+  defaults:
+    _controller: '\Drupal\autotix_error\Controller\TestErrorController::trigger'
+    _title: 'Autotix Test Error'
+  requirements:
+    # Triggers a deliberate fatal error — restrict to site administrators
+    # so it can't be used for log spam or DoS by ordinary authenticated users.
+    _permission: 'administer site configuration'

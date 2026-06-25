@@ -38,7 +38,21 @@ Settings include:
 
 ## Testing the pipeline
 
-Visit `/admin/config/services/autotix/test` to send a deliberate test error end-to-end and confirm a ticket shows up in Autotix.
+Two options, from safest to most thorough:
+
+1. **Logged-error test (built in).** Visit
+   `/admin/config/services/autotix/test` to send a deliberate *logged* error
+   end-to-end and confirm a ticket shows up in Autotix.
+2. **Fatal-error test (optional submodule).** This module bundles a companion
+   submodule, **Autotix Test Error** (`autotix_error`), that exercises the
+   genuine uncaught-PHP-error path. Enable it, then visit `/autotix-test-error`
+   (administrators only) to trigger a real fatal error:
+
+   ```bash
+   drush en autotix_error
+   ```
+
+   Leave it disabled in production — it only exists to verify capture.
 
 ## Development
 
