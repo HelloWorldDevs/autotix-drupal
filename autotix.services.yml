@@ -23,3 +23,13 @@ services:
     arguments:
       - '@cache.default'
       - '@config.factory'
+
+  autotix.env_reporter:
+    class: Drupal\autotix\Service\EnvReporter
+    arguments:
+      - '@http_client'
+      - '@config.factory'
+      - '@key.repository'
+      - '@state'
+      - '@logger.factory'
+      - '@extension.list.module'

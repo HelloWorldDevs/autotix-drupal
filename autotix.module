@@ -44,3 +44,28 @@ function autotix_help($route_name, RouteMatchInterface $route_match) {
   }
 }
 
+/**
+ * Implements hook_cron().
+ *
+ * Reports the site's environment fingerprint (Drupal + PHP version,
+ * installed modules) for the Vulnerability Scanning feature.  The
+ * EnvReporter itself no-ops without a network call unless the
+ * fingerprint changed or the ~monthly recheck window elapsed, so it's
+ * cheap to call on every cron run.  The server drops the report unless
+ * the customer enabled vuln scanning, so reporting is unconditional —
+ * the opt-in gate is server-side.
+ */
+function autotix_cron() {
+  $config = \Drupal::config('autotix.settings');
+  if (!$config->get('enabled')) {
+    return;
+  }
+  try {
+    \Drupal::service('autotix.env_reporter')->maybeReport();
+  }
+  catch (\Throwable $e) {
+    // Never let telemetry break cron.
+    \Drupal::logger('autotix')->warning('Autotix env report cron failed: @m', ['@m' => $e->getMessage()]);
+  }
+}
+
