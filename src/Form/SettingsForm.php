@@ -213,14 +213,13 @@ class SettingsForm extends ConfigFormBase {
       ],
     ];
 
-    // Force an environment report — bypasses the send-only-if-changed
-    // cadence. Essential right after enabling Vulnerability Scanning in the
-    // Autotix dashboard: a previously DECLINED report also advanced the
-    // recheck window, so without this the site stays silent for up to a
-    // month.
+    // Saving an enabled config auto-reports, so this button is a manual
+    // re-report — mainly for after you enable Vulnerability Scanning in the
+    // Autotix dashboard (a previously DECLINED report advanced the recheck
+    // window, so cron would otherwise stay silent for up to a month).
     $form['report_env'] = [
       '#type' => 'submit',
-      '#value' => $this->t('Report environment now'),
+      '#value' => $this->t('Re-report environment now'),
       '#submit' => ['::reportEnvironmentNow'],
       '#limit_validation_errors' => [],
     ];
@@ -248,8 +247,9 @@ class SettingsForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state): void {
+    $enabled = (bool) $form_state->getValue('enabled');
     $this->config('autotix.settings')
-      ->set('enabled', (bool) $form_state->getValue('enabled'))
+      ->set('enabled', $enabled)
       ->set('auth_method', $form_state->getValue('auth_method'))
       ->set('auth_token_key', $form_state->getValue('auth_token_key') ?? '')
       ->set('auth_secret_key', $form_state->getValue('auth_secret_key') ?? '')
@@ -263,6 +263,13 @@ class SettingsForm extends ConfigFormBase {
       ->save();
 
     parent::submitForm($form, $form_state);
+
+    // Report the environment the moment the admin saves an enabled config —
+    // this IS the "I just set it up" moment, so there's no reason to make
+    // them click "Report environment now" separately or wait for cron.
+    if ($enabled) {
+      $this->reportEnvironment();
+    }
   }
 
   /**
@@ -270,6 +277,15 @@ class SettingsForm extends ConfigFormBase {
    * surfaces the server's verdict so setup problems are visible right here.
    */
   public function reportEnvironmentNow(array &$form, FormStateInterface $form_state): void {
+    $this->reportEnvironment();
+  }
+
+  /**
+   * Force an environment report and surface the server's verdict as a
+   * Drupal message. Shared by the settings save and the "Report environment
+   * now" button. Fail-soft: never lets a telemetry error break the form.
+   */
+  protected function reportEnvironment(): void {
     try {
       /** @var \Drupal\autotix\Service\EnvReporter $reporter */
       $reporter = \Drupal::service('autotix.env_reporter');

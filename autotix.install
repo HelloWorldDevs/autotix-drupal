@@ -8,6 +8,35 @@
 use Drupal\key\Entity\Key;
 
 /**
+ * Implements hook_modules_installed().
+ *
+ * Report the environment as soon as the module is installed with an
+ * already-enabled config (e.g. a config-import deploy or `drush en` where
+ * `enabled: true` ships in config) — so Vulnerability Scanning starts
+ * without waiting for cron or a manual "Report environment now". A fresh
+ * install ships `enabled: false`, so nothing is sent until the admin
+ * configures + saves (which also auto-reports). Fail-soft: a telemetry
+ * error must never break module installation.
+ */
+function autotix_modules_installed($modules) {
+  if (!in_array('autotix', $modules, TRUE)) {
+    return;
+  }
+  if (!\Drupal::config('autotix.settings')->get('enabled')) {
+    return;
+  }
+  try {
+    \Drupal::service('autotix.env_reporter')->maybeReport(TRUE);
+  }
+  catch (\Throwable $e) {
+    \Drupal::logger('autotix')->warning(
+      'Autotix install-time env report failed: @message',
+      ['@message' => $e->getMessage()],
+    );
+  }
+}
+
+/**
  * Implements hook_uninstall().
  */
 function autotix_uninstall() {
