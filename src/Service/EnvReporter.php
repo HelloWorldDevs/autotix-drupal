@@ -32,6 +32,7 @@ class EnvReporter {
 
   protected const STATE_FINGERPRINT = 'autotix.env_fingerprint';
   protected const STATE_NEXT_CHECK = 'autotix.env_next_check';
+  protected const STATE_LAST_REPORT = 'autotix.env_last_report';
   protected const RECHECK_DAYS = 30;
 
   protected ClientInterface $httpClient;
@@ -65,7 +66,7 @@ class EnvReporter {
    * @return bool
    *   TRUE when a report was sent and accepted.
    */
-  public function maybeReport(): bool {
+  public function maybeReport(bool $force = FALSE): bool {
     $env = $this->collect();
     $fingerprint = CoreReporter::fingerprint(
       $env['platform'],
@@ -77,7 +78,12 @@ class EnvReporter {
     $last = (string) $this->state->get(self::STATE_FINGERPRINT, '');
     $next = (int) $this->state->get(self::STATE_NEXT_CHECK, 0);
 
-    if ($fingerprint === $last && time() < $next) {
+    // $force bypasses the send-only-if-changed cadence — used by the
+    // "Report environment now" button and drush autotix:report-env, e.g.
+    // right after enabling Vulnerability Scanning server-side (a declined
+    // report also advances the recheck window, so without force the site
+    // would stay silent for up to a month).
+    if (!$force && $fingerprint === $last && time() < $next) {
       return FALSE;
     }
 
@@ -113,7 +119,36 @@ class EnvReporter {
     $this->state->set(self::STATE_FINGERPRINT, $fingerprint);
     $this->state->set(self::STATE_NEXT_CHECK, time() + self::RECHECK_DAYS * 86400);
 
+    // Record the server's verdict for the settings-page status widget:
+    // sent+stored = accepted; sent+stored:false = declined (reason says
+    // Vulnerability Scanning is off server-side); !sent = network failure.
+    $result = $reporter->getLastResult();
+    $this->state->set(self::STATE_LAST_REPORT, [
+      'time' => time(),
+      'sent' => $sent,
+      'stored' => $result['stored'] ?? NULL,
+      'reason' => $result['reason'] ?? NULL,
+    ]);
+
     return $sent;
+  }
+
+  /**
+   * Last report outcome for the status widget, or NULL if never reported.
+   *
+   * @return array{time: int, sent: bool, stored: ?bool, reason: ?string}|null
+   */
+  public function lastReport(): ?array {
+    $value = $this->state->get(self::STATE_LAST_REPORT);
+    return is_array($value) ? $value : NULL;
+  }
+
+  /**
+   * Next scheduled env re-check (Unix timestamp), or NULL if none stored.
+   */
+  public function nextCheckAt(): ?int {
+    $next = (int) $this->state->get(self::STATE_NEXT_CHECK, 0);
+    return $next > 0 ? $next : NULL;
   }
 
   /**

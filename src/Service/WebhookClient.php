@@ -71,6 +71,17 @@ class WebhookClient {
   }
 
   /**
+   * Whether an auth token actually RESOLVES (env var or Key entity) —
+   * "a key is selected" isn't enough; the status widget wants to know
+   * requests will carry a token.
+   */
+  public function hasToken(): bool {
+    $config = $this->configFactory->get('autotix.settings');
+    $token = getenv('AUTOTIX_AUTH_TOKEN') ?: $this->resolveKey($config->get('auth_token_key'));
+    return !empty($token);
+  }
+
+  /**
    * Build the SDK config from autotix.settings + Key entities + env vars.
    * Env vars still win over Key lookups for back-compat with existing setups
    * where AUTOTIX_AUTH_TOKEN was set before the drupal/key migration.

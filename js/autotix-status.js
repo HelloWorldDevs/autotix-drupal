@@ -19,6 +19,17 @@
   }
 
   /**
+   * Format a FUTURE Unix timestamp as "in Xd" (or "due now" once passed).
+   */
+  function timeUntil(timestamp) {
+    const seconds = Math.floor(timestamp - (Date.now() / 1000));
+    if (seconds <= 0) return 'due now';
+    if (seconds < 3600) return 'in ' + Math.max(1, Math.floor(seconds / 60)) + 'm';
+    if (seconds < 86400) return 'in ' + Math.floor(seconds / 3600) + 'h';
+    return 'in ' + Math.floor(seconds / 86400) + 'd';
+  }
+
+  /**
    * Whitelist of known status values. Anything else falls back to "unknown".
    */
   const KNOWN_STATUSES = ['ok', 'failed', 'unknown'];
@@ -59,6 +70,65 @@
     wrapper.appendChild(detail);
 
     container.appendChild(wrapper);
+    container.appendChild(renderSetupHealth(data));
+  }
+
+  /**
+   * Setup-health checklist: is the module wired end to end?  Each row is
+   * a plain OK / attention line built with textContent only.
+   */
+  function renderSetupHealth(data) {
+    const list = document.createElement('ul');
+    list.className = 'autotix-status__health';
+
+    function row(ok, text) {
+      const li = document.createElement('li');
+      li.className =
+        'autotix-status__health-item autotix-status__health-item--' +
+        (ok === true ? 'ok' : ok === false ? 'warn' : 'muted');
+      li.textContent = (ok === true ? '✓ ' : ok === false ? '✗ ' : '· ') + text;
+      list.appendChild(li);
+    }
+
+    row(Boolean(data.enabled), data.enabled
+      ? 'Error forwarding enabled'
+      : 'Error forwarding disabled — enable it above');
+
+    row(Boolean(data.tokenConfigured), data.tokenConfigured
+      ? 'Auth token configured'
+      : 'No auth token — set a Key or the AUTOTIX_AUTH_TOKEN env var');
+
+    if (data.lastDeliveryAt) {
+      row(data.status === 'ok',
+        'Last error delivery ' + (data.status === 'ok' ? 'succeeded ' : 'FAILED ') +
+        timeAgo(data.lastDeliveryAt));
+    } else {
+      row(null, 'No errors delivered yet — use "Send test error" to verify');
+    }
+
+    // Environment reporting (Vulnerability Scanning feed).
+    if (!data.envLastReportAt) {
+      row(null,
+        'Environment not reported yet — runs on cron, or use "Report environment now"');
+    } else if (data.envSent === false) {
+      row(false,
+        'Environment report FAILED ' + timeAgo(data.envLastReportAt) +
+        ' — check connectivity/token');
+    } else if (data.envStored === false) {
+      row(false,
+        'Environment report declined ' + timeAgo(data.envLastReportAt) +
+        (data.envReason
+          ? ' — ' + data.envReason
+          : ' — enable Vulnerability Scanning for this org in Autotix'));
+    } else {
+      row(true,
+        'Environment reported ' + timeAgo(data.envLastReportAt) +
+        (data.envNextCheckAt
+          ? ' · next check ' + timeUntil(data.envNextCheckAt)
+          : ''));
+    }
+
+    return list;
   }
 
   Drupal.behaviors.autotixStatus = {

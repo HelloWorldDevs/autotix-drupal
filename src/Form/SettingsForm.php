@@ -196,6 +196,18 @@ class SettingsForm extends ConfigFormBase {
       ],
     ];
 
+    // Force an environment report — bypasses the send-only-if-changed
+    // cadence. Essential right after enabling Vulnerability Scanning in the
+    // Autotix dashboard: a previously DECLINED report also advanced the
+    // recheck window, so without this the site stays silent for up to a
+    // month.
+    $form['report_env'] = [
+      '#type' => 'submit',
+      '#value' => $this->t('Report environment now'),
+      '#submit' => ['::reportEnvironmentNow'],
+      '#limit_validation_errors' => [],
+    ];
+
     // Links to test and push pages.
     $form['test_link'] = [
       '#type' => 'link',
@@ -234,6 +246,42 @@ class SettingsForm extends ConfigFormBase {
       ->save();
 
     parent::submitForm($form, $form_state);
+  }
+
+  /**
+   * Submit handler for "Report environment now" — forces a report and
+   * surfaces the server's verdict so setup problems are visible right here.
+   */
+  public function reportEnvironmentNow(array &$form, FormStateInterface $form_state): void {
+    try {
+      /** @var \Drupal\autotix\Service\EnvReporter $reporter */
+      $reporter = \Drupal::service('autotix.env_reporter');
+      $sent = $reporter->maybeReport(TRUE);
+      $last = $reporter->lastReport();
+
+      if (!$sent) {
+        $this->messenger()->addError($this->t(
+          'Environment report failed — check connectivity and the auth token.',
+        ));
+      }
+      elseif (($last['stored'] ?? NULL) === FALSE) {
+        $this->messenger()->addWarning($this->t(
+          'Autotix received the report but declined to store it: @reason',
+          ['@reason' => $last['reason'] ?? 'Vulnerability Scanning is not enabled for your organization.'],
+        ));
+      }
+      else {
+        $this->messenger()->addStatus($this->t(
+          'Environment reported to Autotix. Findings appear on your project’s Known Issues card after the next scan.',
+        ));
+      }
+    }
+    catch (\Throwable $e) {
+      $this->messenger()->addError($this->t(
+        'Environment report failed: @message',
+        ['@message' => $e->getMessage()],
+      ));
+    }
   }
 
 }
