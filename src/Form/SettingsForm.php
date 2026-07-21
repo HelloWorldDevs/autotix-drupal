@@ -180,6 +180,23 @@ class SettingsForm extends ConfigFormBase {
       '#description' => $this->t('How long to wait for the Autotix endpoint to respond.'),
     ];
 
+    // Module version — server-rendered so "did my update take?" is
+    // answerable at a glance even if the status fetch fails.
+    $module_version = 'dev';
+    try {
+      $info = \Drupal::service('extension.list.module')->getExtensionInfo('autotix');
+      $module_version = $info['version'] ?? 'dev';
+    }
+    catch (\Throwable $e) {
+      // Leave 'dev' — a version lookup must never break the form.
+    }
+    $form['module_version'] = [
+      '#type' => 'markup',
+      '#markup' => '<p class="autotix-version"><small>' . $this->t(
+        'Autotix module @version', ['@version' => $module_version],
+      ) . '</small></p>',
+    ];
+
     // Webhook delivery status widget (loaded via JS).
     $form['status_widget'] = [
       '#type' => 'container',

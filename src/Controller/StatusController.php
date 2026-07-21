@@ -38,10 +38,20 @@ class StatusController extends ControllerBase {
       // Same — status is best-effort.
     }
 
+    $moduleVersion = NULL;
+    try {
+      $info = \Drupal::service('extension.list.module')->getExtensionInfo('autotix');
+      $moduleVersion = $info['version'] ?? NULL;
+    }
+    catch (\Throwable $e) {
+      // Best effort.
+    }
+
     // These state values are set by WebhookClient after each delivery.
     // On a fresh install (or if no errors have been sent yet), they'll
     // all be NULL — the JS widget handles that with an "unknown" fallback.
     return new JsonResponse([
+      'moduleVersion' => $moduleVersion,
       'status' => $state->get('autotix.last_status'),
       'totalDelivered' => $state->get('autotix.total_delivered') ?? 0,
       'totalFailed' => $state->get('autotix.total_failed') ?? 0,
