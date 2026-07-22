@@ -4,6 +4,7 @@ namespace Drupal\autotix\Service;
 
 use Autotix\PhpSdk\StateRecorderInterface;
 use Autotix\PhpSdk\WebhookClient as CoreClient;
+use Drupal\autotix\EnvVarTrait;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\DependencyInjection\DependencySerializationTrait;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
@@ -29,6 +30,7 @@ class WebhookClient {
   // unserializable. This service rides along whenever WebhookLogger gets
   // serialized (see comment there), so swap dependencies for service IDs.
   use DependencySerializationTrait;
+  use EnvVarTrait;
 
   protected ClientInterface $httpClient;
   protected ConfigFactoryInterface $configFactory;
@@ -71,25 +73,45 @@ class WebhookClient {
   }
 
   /**
-   * Whether an auth token actually RESOLVES (env var or Key entity) —
-   * "a key is selected" isn't enough; the status widget wants to know
-   * requests will carry a token.
+   * Whether the credential the CURRENT auth method needs actually resolves
+   * (env var or Key entity) — for the status widget. Resolves exactly what
+   * the send path uses, so it can't drift into a false "missing".
+   *
+   * @return array{method: string, ok: bool}
+   *   method is token|hmac|none; ok is whether that credential is present
+   *   (always TRUE for none).
    */
-  public function hasToken(): bool {
+  public function credentialStatus(): array {
     $config = $this->configFactory->get('autotix.settings');
-    $token = getenv('AUTOTIX_AUTH_TOKEN') ?: $this->resolveKey($config->get('auth_token_key'));
-    return !empty($token);
+    $method = $config->get('auth_method') ?: 'token';
+    if ($method === 'none') {
+      return ['method' => 'none', 'ok' => TRUE];
+    }
+    if ($method === 'hmac') {
+      $secret = $this->envVar('AUTOTIX_HMAC_SECRET')
+        ?? $this->resolveKey($config->get('auth_secret_key'));
+      return ['method' => 'hmac', 'ok' => !empty($secret)];
+    }
+    $token = $this->envVar('AUTOTIX_AUTH_TOKEN')
+      ?? $this->resolveKey($config->get('auth_token_key'));
+    return ['method' => 'token', 'ok' => !empty($token)];
   }
 
   /**
    * Build the SDK config from autotix.settings + Key entities + env vars.
    * Env vars still win over Key lookups for back-compat with existing setups
    * where AUTOTIX_AUTH_TOKEN was set before the drupal/key migration.
+   *
+   * envVar() (not getenv()) so a token set only in the platform environment
+   * still resolves under PHP-FPM's clear_env — otherwise real-time
+   * (send_immediately) delivery would fail in web requests too.
    */
   protected function buildConfig(): array {
     $config = $this->configFactory->get('autotix.settings');
-    $token = getenv('AUTOTIX_AUTH_TOKEN') ?: $this->resolveKey($config->get('auth_token_key'));
-    $secret = getenv('AUTOTIX_HMAC_SECRET') ?: $this->resolveKey($config->get('auth_secret_key'));
+    $token = $this->envVar('AUTOTIX_AUTH_TOKEN')
+      ?? $this->resolveKey($config->get('auth_token_key'));
+    $secret = $this->envVar('AUTOTIX_HMAC_SECRET')
+      ?? $this->resolveKey($config->get('auth_secret_key'));
     return [
       'auth_method' => $config->get('auth_method') ?? 'token',
       'auth_token' => $token,

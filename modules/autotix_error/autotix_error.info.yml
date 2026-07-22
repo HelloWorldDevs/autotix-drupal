@@ -1,6 +1,6 @@
 name: 'Autotix Test Error'
 type: module
-version: '1.0.1'
+version: '1.0.2'
 description: 'Generates a deliberate PHP error for end-to-end pipeline testing. Visit /autotix-test-error to trigger.'
 core_version_requirement: ^10.3 || ^11
 package: Development

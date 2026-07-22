@@ -17,15 +17,16 @@ class StatusController extends ControllerBase {
     $state = \Drupal::state();
     $config = $this->config('autotix.settings');
 
-    // Setup health: does the auth token resolve, and how did the last
-    // environment report go? A declined env report (stored:false) means
-    // Vulnerability Scanning isn't enabled for this org in Autotix.
-    $tokenConfigured = FALSE;
+    // Setup health: does the credential the current auth method needs
+    // resolve, and how did the last environment report go? A declined env
+    // report (stored:false) means Vulnerability Scanning isn't enabled for
+    // this org in Autotix.
+    $credential = ['method' => 'token', 'ok' => FALSE];
     try {
-      $tokenConfigured = \Drupal::service('autotix.client')->hasToken();
+      $credential = \Drupal::service('autotix.client')->credentialStatus();
     }
     catch (\Throwable $e) {
-      // Status must never 500 — leave FALSE.
+      // Status must never 500 — leave the default.
     }
     $envLast = NULL;
     $envNext = NULL;
@@ -58,7 +59,8 @@ class StatusController extends ControllerBase {
       'lastDeliveryAt' => $state->get('autotix.last_delivery_at'),
       'enabled' => (bool) $config->get('enabled'),
       'sendImmediately' => (bool) $config->get('send_immediately'),
-      'tokenConfigured' => $tokenConfigured,
+      'authMethod' => $credential['method'],
+      'credentialOk' => $credential['ok'],
       'envLastReportAt' => $envLast['time'] ?? NULL,
       'envSent' => $envLast['sent'] ?? NULL,
       'envStored' => $envLast['stored'] ?? NULL,

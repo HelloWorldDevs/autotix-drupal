@@ -94,9 +94,22 @@
       ? 'Error forwarding enabled'
       : 'Error forwarding disabled — enable it above');
 
-    row(Boolean(data.tokenConfigured), data.tokenConfigured
-      ? 'Auth token configured'
-      : 'No auth token — set a Key or the AUTOTIX_AUTH_TOKEN env var');
+    // credentialOk reflects the credential the CURRENT auth method needs.
+    // (tokenConfigured is the pre-1.0.2 field name — fall back for a stale
+    // cached response.)
+    const credentialOk =
+      data.credentialOk != null ? data.credentialOk : data.tokenConfigured;
+    if (data.authMethod === 'none') {
+      row(true, 'Authentication disabled (no credential required)');
+    } else if (data.authMethod === 'hmac') {
+      row(Boolean(credentialOk), credentialOk
+        ? 'HMAC secret configured'
+        : 'No HMAC secret — set a Key or the AUTOTIX_HMAC_SECRET env var');
+    } else {
+      row(Boolean(credentialOk), credentialOk
+        ? 'Auth token configured'
+        : 'No auth token — set a Key or the AUTOTIX_AUTH_TOKEN env var');
+    }
 
     if (data.lastDeliveryAt) {
       row(data.status === 'ok',

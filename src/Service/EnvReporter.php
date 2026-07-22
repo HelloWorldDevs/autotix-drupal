@@ -3,6 +3,7 @@
 namespace Drupal\autotix\Service;
 
 use Autotix\PhpSdk\EnvReporter as CoreReporter;
+use Drupal\autotix\EnvVarTrait;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\DependencyInjection\DependencySerializationTrait;
 use Drupal\Core\Extension\ModuleExtensionList;
@@ -29,6 +30,7 @@ use GuzzleHttp\Psr7\HttpFactory;
 class EnvReporter {
 
   use DependencySerializationTrait;
+  use EnvVarTrait;
 
   protected const STATE_FINGERPRINT = 'autotix.env_fingerprint';
   protected const STATE_NEXT_CHECK = 'autotix.env_next_check';
@@ -88,7 +90,10 @@ class EnvReporter {
     }
 
     $config = $this->configFactory->get('autotix.settings');
-    $token = getenv('AUTOTIX_AUTH_TOKEN') ?: $this->resolveKey($config->get('auth_token_key'));
+    // envVar() (not getenv()) so a platform-set token still resolves under
+    // PHP-FPM's clear_env — the env report can run in a web request too.
+    $token = $this->envVar('AUTOTIX_AUTH_TOKEN')
+      ?? $this->resolveKey($config->get('auth_token_key'));
 
     $reporter = new CoreReporter(
       $this->httpClient,
