@@ -54,6 +54,31 @@ Two options, from safest to most thorough:
 
    Leave it disabled in production — it only exists to verify capture.
 
+## Vulnerability Scanning
+
+Alongside error capture, the module reports an environment fingerprint —
+Drupal/PHP versions plus resolved package versions — to Autotix, which
+matches it against advisory feeds and surfaces known-vulnerable
+dependencies. Reporting runs on `hook_cron` (once, then re-checked
+monthly and only re-sent when something changed); force an immediate
+report with:
+
+```bash
+drush autotix:report-env --force
+```
+
+The package list spans two ecosystems:
+
+- **Drupal modules** (`ecosystem: Drupal`) — every installed module + version.
+- **npm packages** (`ecosystem: npm`) — front-end JS dependencies with
+  resolved versions read from `package-lock.json` (every lockfile format,
+  direct + transitive). The module probes well-known locations without
+  descending into `node_modules`: the Composer project root, the Drupal
+  root, and custom theme/module/profile directories. A `package.json`
+  with no committed lockfile is a best-effort fallback — only
+  exact-pinned versions are reported, since a range is not a resolved
+  install.
+
 ## Development
 
 ```bash
