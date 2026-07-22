@@ -37,6 +37,12 @@ class EnvReporter {
   protected const STATE_LAST_REPORT = 'autotix.env_last_report';
   protected const RECHECK_DAYS = 30;
 
+  /**
+   * Upper bound on npm packages reported, to keep the payload sane on
+   * sites with a large committed lockfile.
+   */
+  protected const MAX_NPM_PACKAGES = 750;
+
   protected ClientInterface $httpClient;
   protected ConfigFactoryInterface $configFactory;
   protected KeyRepositoryInterface $keyRepository;
@@ -175,7 +181,10 @@ class EnvReporter {
       'platform' => 'drupal',
       'platformVersion' => \Drupal::VERSION,
       'runtime' => 'php ' . PHP_VERSION,
-      'packages' => $this->collectModules(),
+      // Drupal modules (ecosystem "Drupal") plus any front-end npm
+      // dependencies (ecosystem "npm") found in the codebase, so the
+      // Vulnerability Scanning feed covers both stacks.
+      'packages' => array_merge($this->collectModules(), $this->collectNpmPackages()),
       'projectKey' => $config->get('project_key') ?: NULL,
     ];
   }
@@ -203,6 +212,180 @@ class EnvReporter {
       ];
     }
     return $packages;
+  }
+
+  /**
+   * Enumerate npm packages from lockfiles found in the codebase.
+   *
+   * Drupal front-end tooling (themes, build pipelines, the project root)
+   * commonly ships a package.json + package-lock.json, and those JS
+   * dependencies carry their own CVEs.  We surface them to the same
+   * Vulnerability Scanning feed as Drupal modules, tagged ecosystem
+   * "npm" so the server matches them against the npm advisory database.
+   *
+   * Resolved versions come from package-lock.json (every lockfile
+   * format, direct + transitive).  A package.json with no lockfile is a
+   * best-effort fallback: only exact-pinned versions are reported, since
+   * a range like "^4.17.0" is not an installed version.  Results are
+   * deduplicated by name+version and capped at self::MAX_NPM_PACKAGES.
+   *
+   * @return array<int, array{name: string, version: string, ecosystem: string}>
+   */
+  protected function collectNpmPackages(): array {
+    $seen = [];
+    $packages = [];
+    foreach ($this->npmLockfilePaths() as $path) {
+      $contents = @file_get_contents($path);
+      if ($contents === FALSE || $contents === '') {
+        continue;
+      }
+      $entries = str_ends_with($path, 'package-lock.json')
+        ? self::parseNpmLockfile($contents)
+        : self::parseNpmManifest($contents);
+      foreach ($entries as $entry) {
+        $key = $entry['name'] . '@' . $entry['version'];
+        if (isset($seen[$key])) {
+          continue;
+        }
+        $seen[$key] = TRUE;
+        $packages[] = $entry + ['ecosystem' => 'npm'];
+        if (count($packages) >= self::MAX_NPM_PACKAGES) {
+          $this->loggerFactory->get('autotix')->warning(
+            'Autotix npm scan hit the @max package cap; some dependencies were not reported.',
+            ['@max' => self::MAX_NPM_PACKAGES],
+          );
+          return $packages;
+        }
+      }
+    }
+    return $packages;
+  }
+
+  /**
+   * Candidate npm lockfile/manifest paths, most-authoritative first.
+   *
+   * We probe a small set of well-known locations rather than walking the
+   * tree (which would descend into node_modules): the Composer project
+   * root (one level above the Drupal root), the Drupal root itself, and
+   * any custom theme/module/profile directory.  For each location a
+   * package-lock.json wins; package.json is the fallback.
+   *
+   * @return array<int, string>
+   */
+  protected function npmLockfilePaths(): array {
+    if (!defined('DRUPAL_ROOT')) {
+      return [];
+    }
+    $roots = [dirname(DRUPAL_ROOT), DRUPAL_ROOT];
+    foreach (['themes/custom', 'modules/custom', 'profiles/custom'] as $sub) {
+      $roots = array_merge($roots, glob(DRUPAL_ROOT . '/' . $sub . '/*', GLOB_ONLYDIR) ?: []);
+    }
+    $paths = [];
+    foreach (array_unique($roots) as $root) {
+      if (is_file($root . '/package-lock.json')) {
+        $paths[] = $root . '/package-lock.json';
+      }
+      elseif (is_file($root . '/package.json')) {
+        $paths[] = $root . '/package.json';
+      }
+    }
+    return $paths;
+  }
+
+  /**
+   * Parse a package-lock.json into {name, version} pairs.
+   *
+   * Supports every lockfile format: v1 keeps a recursive "dependencies"
+   * tree keyed by package name; v2/v3 keep a flat "packages" map keyed
+   * by install path ("node_modules/<name>", possibly nested).  Entries
+   * without a concrete version (link/workspace stubs, the root package)
+   * are skipped.  Static + pure so it is trivially unit-testable.
+   *
+   * @return array<int, array{name: string, version: string}>
+   */
+  public static function parseNpmLockfile(string $contents): array {
+    $data = json_decode($contents, TRUE);
+    if (!is_array($data)) {
+      return [];
+    }
+    $out = [];
+    // v2/v3: flat "packages" map keyed by install path.
+    if (isset($data['packages']) && is_array($data['packages'])) {
+      foreach ($data['packages'] as $path => $info) {
+        // "" is the root project; links/workspaces have no version.
+        if ($path === '' || !is_array($info) || empty($info['version'])) {
+          continue;
+        }
+        $pos = strrpos((string) $path, 'node_modules/');
+        if ($pos === FALSE) {
+          continue;
+        }
+        $name = substr((string) $path, $pos + strlen('node_modules/'));
+        if ($name !== '') {
+          $out[] = ['name' => $name, 'version' => (string) $info['version']];
+        }
+      }
+    }
+    // v1: recursive "dependencies" tree keyed by name.
+    if (isset($data['dependencies']) && is_array($data['dependencies'])) {
+      self::flattenNpmV1($data['dependencies'], $out);
+    }
+    return $out;
+  }
+
+  /**
+   * Recursively flatten a v1 lockfile "dependencies" tree.
+   *
+   * @param array<string, mixed> $deps
+   *   The "dependencies" map from a v1 lockfile (or a nested subtree).
+   * @param array<int, array{name: string, version: string}> $out
+   *   Accumulator, appended to in place.
+   */
+  private static function flattenNpmV1(array $deps, array &$out): void {
+    foreach ($deps as $name => $info) {
+      if (!is_array($info) || empty($info['version'])) {
+        continue;
+      }
+      $out[] = ['name' => (string) $name, 'version' => (string) $info['version']];
+      if (isset($info['dependencies']) && is_array($info['dependencies'])) {
+        self::flattenNpmV1($info['dependencies'], $out);
+      }
+    }
+  }
+
+  /**
+   * Parse a package.json manifest as a fallback when no lockfile exists.
+   *
+   * Only exact-pinned versions are returned — a range ("^1.2.0", "~1",
+   * "*", "latest", a git/url/file spec) is not a resolved install and
+   * would produce false advisory matches, so those are skipped.  Static
+   * + pure for unit-testability.
+   *
+   * @return array<int, array{name: string, version: string}>
+   */
+  public static function parseNpmManifest(string $contents): array {
+    $data = json_decode($contents, TRUE);
+    if (!is_array($data)) {
+      return [];
+    }
+    $out = [];
+    foreach (['dependencies', 'devDependencies', 'optionalDependencies'] as $section) {
+      if (!isset($data[$section]) || !is_array($data[$section])) {
+        continue;
+      }
+      foreach ($data[$section] as $name => $constraint) {
+        if (!is_string($constraint)) {
+          continue;
+        }
+        $version = ltrim(trim($constraint), '=v');
+        // Accept only a bare, exact semver (optionally with a
+        // pre-release / build suffix); reject ranges, tags, urls.
+        if (preg_match('/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/', $version)) {
+          $out[] = ['name' => (string) $name, 'version' => $version];
+        }
+      }
+    }
+    return $out;
   }
 
   /**
