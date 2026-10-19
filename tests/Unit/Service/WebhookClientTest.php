@@ -186,7 +186,7 @@ class WebhookClientTest extends TestCase {
   // -------------------------------------------------------------------
 
   public function testSendDelegatesToSdkAndReturnsTrueOn2xx(): void {
-    $this->httpClient->method('sendRequest')
+    $this->httpClient->method('send')
       ->willReturn(new Response(202, [], '{"ok":true}'));
 
     $this->assertTrue(
@@ -195,11 +195,34 @@ class WebhookClientTest extends TestCase {
   }
 
   public function testSendThrowsOnNon2xxFromSdk(): void {
-    $this->httpClient->method('sendRequest')
+    $this->httpClient->method('send')
       ->willReturn(new Response(500));
 
     $this->expectException(\RuntimeException::class);
     $this->expectExceptionMessage('HTTP 500');
+    $this->client()->send(['message' => 'x']);
+  }
+
+  public function testSendAppliesConfiguredTimeout(): void {
+    $this->configValues['timeout'] = 7;
+    $this->httpClient->expects($this->once())
+      ->method('send')
+      ->with($this->anything(), $this->callback(
+        fn(array $options) => $options['timeout'] === 7
+          && $options['http_errors'] === FALSE
+          && $options['allow_redirects'] === FALSE,
+      ))
+      ->willReturn(new Response(202));
+
+    $this->client()->send(['message' => 'x']);
+  }
+
+  public function testSendDefaultsTimeoutToTwentySeconds(): void {
+    $this->httpClient->expects($this->once())
+      ->method('send')
+      ->with($this->anything(), $this->callback(fn(array $o) => $o['timeout'] === 20))
+      ->willReturn(new Response(202));
+
     $this->client()->send(['message' => 'x']);
   }
 

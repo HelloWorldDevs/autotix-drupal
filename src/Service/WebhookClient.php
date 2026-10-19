@@ -5,6 +5,7 @@ namespace Drupal\autotix\Service;
 use Autotix\PhpSdk\StateRecorderInterface;
 use Autotix\PhpSdk\WebhookClient as CoreClient;
 use Drupal\autotix\EnvVarTrait;
+use Drupal\autotix\Http\TimeoutHttpClient;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\DependencyInjection\DependencySerializationTrait;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
@@ -61,8 +62,9 @@ class WebhookClient {
    * @throws \Psr\Http\Client\ClientExceptionInterface Network failure.
    */
   public function send(array $payload): bool {
+    $timeout = (int) ($this->configFactory->get('autotix.settings')->get('timeout') ?? 20);
     $core = new CoreClient(
-      $this->httpClient,
+      new TimeoutHttpClient($this->httpClient, $timeout),
       new HttpFactory(),
       new HttpFactory(),
       $this->buildConfig(),

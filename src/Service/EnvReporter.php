@@ -3,6 +3,7 @@
 namespace Drupal\autotix\Service;
 
 use Autotix\PhpSdk\EnvReporter as CoreReporter;
+use Drupal\autotix\Http\TimeoutHttpClient;
 use Drupal\autotix\EnvVarTrait;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\DependencyInjection\DependencySerializationTrait;
@@ -102,7 +103,10 @@ class EnvReporter {
       ?? $this->resolveKey($config->get('auth_token_key'));
 
     $reporter = new CoreReporter(
-      $this->httpClient,
+      new TimeoutHttpClient(
+        $this->httpClient,
+        (int) ($this->configFactory->get('autotix.settings')->get('timeout') ?? 20),
+      ),
       new HttpFactory(),
       new HttpFactory(),
       [
